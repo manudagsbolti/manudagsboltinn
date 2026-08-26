@@ -1,32 +1,37 @@
-let ctx: AudioContext | null = null
+let context: AudioContext | null = null
 
 function getContext() {
-  if (!ctx) ctx = new AudioContext()
-  return ctx
+  if (!context) context = new AudioContext()
+  return context
 }
 
 export async function unlockAudio() {
-  const audio = getContext()
-  if (audio.state === 'suspended') await audio.resume()
+  const ctx = getContext()
+  if (ctx.state === 'suspended') await ctx.resume()
+  const oscillator = ctx.createOscillator()
+  const gain = ctx.createGain()
+  gain.gain.value = 0.00001
+  oscillator.connect(gain).connect(ctx.destination)
+  oscillator.start()
+  oscillator.stop(ctx.currentTime + 0.02)
 }
 
 export async function playBuzzer() {
-  const audio = getContext()
-  if (audio.state === 'suspended') await audio.resume()
-
-  const now = audio.currentTime
-  const master = audio.createGain()
-  master.gain.setValueAtTime(0.0001, now)
-  master.gain.exponentialRampToValueAtTime(0.85, now + 0.02)
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15)
-  master.connect(audio.destination)
-
-  ;[185, 220].forEach((frequency, index) => {
-    const oscillator = audio.createOscillator()
-    oscillator.type = index === 0 ? 'sawtooth' : 'square'
-    oscillator.frequency.value = frequency
-    oscillator.connect(master)
-    oscillator.start(now)
-    oscillator.stop(now + 1.15)
-  })
+  const ctx = getContext()
+  if (ctx.state === 'suspended') await ctx.resume()
+  const start = ctx.currentTime
+  for (let i = 0; i < 3; i++) {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'square'
+    osc.frequency.value = i === 2 ? 520 : 430
+    gain.gain.setValueAtTime(0.0001, start + i * 0.3)
+    gain.gain.exponentialRampToValueAtTime(0.75, start + i * 0.3 + 0.02)
+    gain.gain.setValueAtTime(0.75, start + i * 0.3 + 0.18)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.3 + 0.26)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start(start + i * 0.3)
+    osc.stop(start + i * 0.3 + 0.28)
+  }
+  if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 400])
 }
