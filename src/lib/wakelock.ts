@@ -1,21 +1,17 @@
-let wakeLock: any = null
+let lock: WakeLockSentinel | null = null
 
 export async function requestWakeLock() {
   try {
-    if ('wakeLock' in navigator && document.visibilityState === 'visible') {
-      wakeLock = await (navigator as any).wakeLock.request('screen')
-    }
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return
+    if (lock && !lock.released) return
+    lock = await navigator.wakeLock.request('screen')
+    lock.addEventListener('release', () => { lock = null })
   } catch {
-    // Wake lock is best-effort; the live game must never depend on it.
+    lock = null
   }
 }
 
 export async function releaseWakeLock() {
-  try {
-    await wakeLock?.release?.()
-  } catch {
-    // no-op
-  } finally {
-    wakeLock = null
-  }
+  try { await lock?.release() } catch { /* noop */ }
+  lock = null
 }

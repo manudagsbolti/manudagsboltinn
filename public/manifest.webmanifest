@@ -1,11 +1,11 @@
 {
   "name": "Mánudagsboltinn",
-  "short_name": "Mánudagsbolti",
+  "short_name": "Boltinn",
+  "description": "Live skráning, timer og tölfræði fyrir Mánudagsboltann.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1712",
-  "theme_color": "#0d1712",
-  "lang": "is",
+  "background_color": "#09100c",
+  "theme_color": "#09100c",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
