@@ -1,9 +1,15 @@
-export type MainView = 'HOME' | 'STATS' | 'ADMIN'
+export type MainRoute = 'home' | 'players' | 'stats' | 'cloud'
 
-export function BottomNav({ view, onChange }: { view: MainView; onChange: (view: MainView) => void }) {
-  return <nav className="bottom-nav">
-    <button className={view === 'HOME' ? 'active' : ''} onClick={() => onChange('HOME')}>⌂<span>Heim</span></button>
-    <button className={view === 'STATS' ? 'active' : ''} onClick={() => onChange('STATS')}>▥<span>Tölfræði</span></button>
-    <button className={view === 'ADMIN' ? 'active' : ''} onClick={() => onChange('ADMIN')}>⚙<span>Stjórnun</span></button>
-  </nav>
+export function BottomNav({ current, navigate }: { current: MainRoute; navigate: (route: MainRoute) => void }) {
+  const items: { route: MainRoute; icon: string; label: string }[] = [
+    { route: 'home', icon: '⌂', label: 'Heim' },
+    { route: 'players', icon: '♟', label: 'Leikmenn' },
+    { route: 'stats', icon: '▥', label: 'Tölfræði' },
+    { route: 'cloud', icon: '☁', label: 'Sync' },
+  ]
+  return <nav className="bottom-nav">{items.map((item) => (
+    <button key={item.route} className={current === item.route ? 'active' : ''} onClick={() => navigate(item.route)}>
+      <span>{item.icon}</span><small>{item.label}</small>
+    </button>
+  ))}</nav>
 }

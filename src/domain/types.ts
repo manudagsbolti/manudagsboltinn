@@ -1,211 +1,129 @@
-export type PlayerRole = 'REGULAR' | 'SUBSTITUTE'
-export type TeamCode = 'A' | 'B' | 'C'
-export type TimerStatus = 'READY' | 'RUNNING' | 'PAUSED' | 'FINISHED'
-export type SessionStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED'
-export type SeasonStatus = 'PLANNED' | 'ACTIVE' | 'CLOSED'
-export type EndReason = 'GOAL' | 'TIME_EXPIRED'
-export type GoalEventType = 'GOAL' | 'OWN_GOAL'
-export type TimerEventType = 'START' | 'PAUSE' | 'RESUME' | 'EXPIRE'
+export type UUID = string
+export type IsoDateTime = string
+
+export type SessionStatus = 'draft' | 'live' | 'completed'
+export type SetStatus = 'ready' | 'live' | 'completed'
+export type GameStatus = 'ready' | 'live' | 'paused' | 'completed'
+export type GameEndReason = 'goal' | 'timeout' | 'manual'
 
 export interface Player {
-  id: string
+  id: UUID
   name: string
-  nickname: string | null
-  active: boolean
-  createdAt: number
-  updatedAt: number
+  nickname?: string | null
+  isActive: boolean
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
 export interface Season {
-  id: string
+  id: UUID
   name: string
-  startDate: string
-  endDate: string
-  status: SeasonStatus
-  createdAt: number
-  updatedAt: number
-}
-
-export interface PlayerRolePeriod {
-  id: string
-  seasonId: string
-  playerId: string
-  role: PlayerRole
-  validFrom: string
-  validTo: string | null
-  createdAt: number
-  updatedAt: number
-}
-
-export interface SessionTeam {
-  id: string
-  code: TeamCode
-}
-
-export interface SessionPlayer {
-  id: string
-  playerId: string
-  roleAtSession: PlayerRole
-  teamCode: TeamCode
-  present: boolean
-}
-
-export interface GoalEvent {
-  id: string
-  type: GoalEventType
-  scoringTeam: TeamCode
-  scorerId: string
-  assistId: string | null
-  miniGameId: string
-  createdAt: number
-}
-
-export interface TimerEvent {
-  id: string
-  type: TimerEventType
-  miniGameId: string
-  timestamp: number
-}
-
-export interface MiniGameRecord {
-  id: string
-  setId: string
-  setNumber: number
-  sequenceNumber: number
-  team1: TeamCode
-  team2: TeamCode
-  waitingTeam: TeamCode | null
-  incumbentTeam: TeamCode | null
-  winnerTeam: TeamCode | null
-  outgoingTeam: TeamCode | null
-  incomingTeam: TeamCode | null
-  endReason: EndReason
-  startedAt: number | null
-  endedAt: number
-}
-
-export interface ActiveMiniGame {
-  id: string
-  setId: string
-  sequenceNumber: number
-  team1: TeamCode
-  team2: TeamCode
-  waitingTeam: TeamCode | null
-  incumbentTeam: TeamCode | null
-  status: TimerStatus
-  remainingMs: number
-  deadlineAt: number | null
-  startedAt: number | null
-}
-
-export interface SetWin {
-  id: string
-  setNumber: number
-  winnerTeam: TeamCode
-  wonAt: number
-  finalWins: Record<TeamCode, number>
+  startsOn: string
+  endsOn?: string | null
+  isActive: boolean
 }
 
 export interface Session {
-  id: string
-  seasonId: string
-  sessionDate: string
-  teamCount: 2 | 3
-  gameDurationSeconds: number
-  winsRequired: number
+  id: UUID
+  seasonId?: UUID | null
+  playedOn: string
   status: SessionStatus
-  teams: SessionTeam[]
-  players: SessionPlayer[]
-  setNumber: number
-  currentSetId: string
-  setWins: Record<TeamCode, number>
-  sessionSets: Record<TeamCode, number>
-  activeGame: ActiveMiniGame
-  miniGames: MiniGameRecord[]
-  goals: GoalEvent[]
-  timerEvents: TimerEvent[]
-  completedSets: SetWin[]
-  startedAt: number | null
-  endedAt: number | null
-  createdAt: number
-  updatedAt: number
+  gameDurationSeconds: number
+  winsPerPoint: number
+  pointsToWinSet: number
+  startedAt?: IsoDateTime | null
+  completedAt?: IsoDateTime | null
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
-export interface SyncMeta {
-  pending: boolean
-  lastSyncAt: number | null
-  lastError: string | null
-  deviceId: string
+export interface SessionPlayer {
+  sessionId: UUID
+  playerId: UUID
 }
 
-export interface AppState {
-  version: 2
-  players: Player[]
-  seasons: Season[]
-  rolePeriods: PlayerRolePeriod[]
-  sessions: Session[]
-  activeSessionId: string | null
-  selectedSeasonId: string | null
-  sync: SyncMeta
-  updatedAt: number
+export interface SetRecord {
+  id: UUID
+  sessionId: UUID
+  setNo: number
+  status: SetStatus
+  winningTeamId?: UUID | null
+  startedAt?: IsoDateTime | null
+  endedAt?: IsoDateTime | null
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
+}
+
+export interface SetTeam {
+  id: UUID
+  setId: UUID
+  name: string
+  color: string
+  sortOrder: number
+}
+
+export interface SetTeamMember {
+  setId: UUID
+  teamId: UUID
+  playerId: UUID
+}
+
+export interface Game {
+  id: UUID
+  setId: UUID
+  gameNo: number
+  holderTeamId: UUID
+  challengerTeamId: UUID
+  waitingTeamId?: UUID | null
+  status: GameStatus
+  startedAt?: IsoDateTime | null
+  endedAt?: IsoDateTime | null
+  durationSeconds: number
+  remainingSeconds: number
+  timerStartedAt?: IsoDateTime | null
+  endReason?: GameEndReason | null
+  winningTeamId?: UUID | null
+  exitingTeamId?: UUID | null
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
+}
+
+export interface Goal {
+  id: UUID
+  gameId: UUID
+  teamId: UUID
+  scorerPlayerId: UUID
+  assistPlayerId?: UUID | null
+  secondsElapsed: number
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
+  deletedAt?: IsoDateTime | null
+}
+
+export interface TeamSetStats {
+  teamId: UUID
+  smallWins: number
+  points: number
+  progressWins: number
+  isWinner: boolean
+  isChoke: boolean
+  isZeroPointSet: boolean
 }
 
 export interface PlayerSessionStats {
-  playerId: string
-  playerName: string
-  teamCode: TeamCode
-  roleAtSession: PlayerRole
-  miniGames: number
-  wins: number
-  sets: number
+  playerId: UUID
+  points: number
+  smallWins: number
+  setsPlayed: number
   goals: number
   assists: number
-  goalContributions: number
-  ownGoals: number
+  setWins: number
   chokes: number
-  nix: number
-  winPct: number
+  zeroPointSets: number
+  nixDay: boolean
 }
 
-export interface TeamSessionStats {
-  teamCode: TeamCode
-  players: number
-  miniGames: number
-  wins: number
-  sets: number
-  goals: number
-  chokes: number
-  nix: number
-  winPct: number
-}
-
-export interface SeasonPlayerStats {
-  playerId: string
-  playerName: string
-  appearances: number
-  eligibleSessions: number
-  attendancePct: number
-  miniGames: number
-  wins: number
-  sets: number
-  goals: number
-  assists: number
-  goalContributions: number
-  ownGoals: number
-  chokes: number
-  nix: number
-  winPct: number
-}
-
-export interface PairStats {
-  key: string
-  player1Id: string
-  player2Id: string
-  player1Name: string
-  player2Name: string
-  appearancesTogether: number
-  miniGames: number
-  wins: number
-  sets: number
-  winPct: number
+export interface AllTimePlayerStats extends PlayerSessionStats {
+  sessions: number
+  nixDays: number
 }

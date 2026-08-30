@@ -1,42 +1,44 @@
 import { useEffect, useState } from 'react'
-import { BottomNav, type MainView } from './components/BottomNav'
-import { useApp } from './context/AppContext'
-import { AdminScreen } from './screens/AdminScreen'
-import { HomeScreen } from './screens/HomeScreen'
-import { LiveScreen } from './screens/LiveScreen'
-import { SessionSetupScreen } from './screens/SessionSetupScreen'
-import { SessionSummaryScreen } from './screens/SessionSummaryScreen'
-import { StatsScreen } from './screens/StatsScreen'
+import { BottomNav, type MainRoute } from './components/BottomNav'
+import { CloudScreen } from './components/CloudScreen'
+import { HomeScreen } from './components/HomeScreen'
+import { LiveSessionScreen } from './components/LiveSessionScreen'
+import { NewSessionScreen } from './components/NewSessionScreen'
+import { PlayersScreen } from './components/PlayersScreen'
+import { SessionSummaryScreen } from './components/SessionSummaryScreen'
+import { SeasonPresentationScreen } from './components/SeasonPresentationScreen'
+import { StatsScreen } from './components/StatsScreen'
+import { TeamSetupScreen } from './components/TeamSetupScreen'
 import './styles.css'
 
-type Route = { type: 'MAIN' } | { type: 'SETUP' } | { type: 'LIVE'; sessionId: string } | { type: 'SUMMARY'; sessionId: string }
+type Route = { name: MainRoute | 'new' | 'setup' | 'live' | 'summary' | 'presentation'; id?: string }
 
-type InstallEvent = Event & { prompt: () => Promise<void> }
+function parseRoute(): Route {
+  const hash = location.hash.replace(/^#\/?/, '')
+  const [name, id] = hash.split('/')
+  if (['players','stats','cloud','new','setup','live','summary','presentation'].includes(name)) return { name: name as Route['name'], id }
+  return { name: 'home' }
+}
 
 export default function App() {
-  const { state } = useApp()
-  const [mainView, setMainView] = useState<MainView>('HOME')
-  const [route, setRoute] = useState<Route>({ type: 'MAIN' })
-  const [installPrompt, setInstallPrompt] = useState<InstallEvent | null>(null)
+  const [route, setRoute] = useState<Route>(parseRoute())
+  useEffect(() => { const handler = () => setRoute(parseRoute()); window.addEventListener('hashchange', handler); return () => window.removeEventListener('hashchange', handler) }, [])
+  const go = (name: Route['name'], id?: string) => { location.hash = id ? `#/${name}/${id}` : `#/${name}` }
+  const main = (name: MainRoute) => go(name)
+  const isImmersive = ['new','setup','live','summary','presentation'].includes(route.name)
 
-  useEffect(() => {
-    const handler = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallEvent) }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
-
-  const routedSession = route.type === 'LIVE' || route.type === 'SUMMARY' ? state.sessions.find((s) => s.id === route.sessionId) : null
-
-  if (route.type === 'SETUP') return <SessionSetupScreen onCancel={() => setRoute({ type: 'MAIN' })} onCreated={(sessionId) => setRoute({ type: 'LIVE', sessionId })} />
-
-  if (route.type === 'LIVE' && routedSession) return <LiveScreen session={routedSession} onSummary={(s) => setRoute({ type: 'SUMMARY', sessionId: s.id })} onFinished={(s) => setRoute({ type: 'SUMMARY', sessionId: s.id })} />
-  if (route.type === 'SUMMARY' && routedSession) return <SessionSummaryScreen session={routedSession} onBack={() => setRoute({ type: 'MAIN' })} />
-
-  return <>
-    {mainView === 'HOME' && <HomeScreen onNewSession={() => setRoute({ type: 'SETUP' })} onOpenSession={(s) => setRoute({ type: 'LIVE', sessionId: s.id })} onOpenSummary={(s) => setRoute({ type: 'SUMMARY', sessionId: s.id })} />}
-    {mainView === 'STATS' && <StatsScreen />}
-    {mainView === 'ADMIN' && <AdminScreen />}
-    <BottomNav view={mainView} onChange={setMainView} />
-    {installPrompt && <button className="install-fab" onClick={async () => { await installPrompt.prompt(); setInstallPrompt(null) }}>＋ Setja app á heimaskjá</button>}
-  </>
+  return <div className="app-shell">
+    <div className="app-content">
+      {route.name === 'home' && <HomeScreen onNew={()=>go('new')} onContinue={id=>go('live',id)} onSetup={id=>go('setup',id)} onSummary={id=>go('summary',id)}/>} 
+      {route.name === 'players' && <PlayersScreen/>}
+      {route.name === 'stats' && <StatsScreen onPresent={year=>go('presentation',String(year))}/>}
+      {route.name === 'cloud' && <CloudScreen/>}
+      {route.name === 'new' && <NewSessionScreen onCreated={id=>go('setup',id)} onCancel={()=>go('home')}/>} 
+      {route.name === 'setup' && route.id && <TeamSetupScreen sessionId={route.id} onReady={()=>go('live',route.id)} onCancel={()=>go('home')}/>} 
+      {route.name === 'live' && route.id && <LiveSessionScreen sessionId={route.id} onReshuffle={()=>go('setup',route.id)} onFinish={()=>go('summary',route.id)} onBack={()=>go('home')}/>} 
+      {route.name === 'summary' && route.id && <SessionSummaryScreen sessionId={route.id} onBack={()=>go('home')}/>} 
+      {route.name === 'presentation' && route.id && <SeasonPresentationScreen seasonYear={Number(route.id)} onBack={()=>go('stats')}/>} 
+    </div>
+    {!isImmersive && <BottomNav current={route.name as MainRoute} navigate={main}/>} 
+  </div>
 }
