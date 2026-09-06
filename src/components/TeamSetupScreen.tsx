@@ -12,7 +12,7 @@ const TEAM_PRESETS = [
 
 type SplitMode = 'full' | 'weighted'
 
-export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: string; onReady: () => void; onCancel: () => void }) {
+export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false }: { sessionId: string; onReady: () => void; onCancel: () => void; recorder?: boolean }) {
   const data = useLiveQuery(async () => {
     const session = await db.sessions.get(sessionId)
     if (!session) return null
@@ -33,7 +33,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
   }, [sessionId])
   const [teamCount, setTeamCount] = useState(3)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
-  const [splitMode, setSplitMode] = useState<SplitMode>('weighted')
+  const [splitMode, setSplitMode] = useState<SplitMode>(recorder ? 'full' : 'weighted')
   const [stage, setStage] = useState<'roster'|'teams'>('roster')
   const [shuffling, setShuffling] = useState(false)
   const [seededCount, setSeededCount] = useState(false)
@@ -44,7 +44,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
   }, [players.length, seededCount])
 
   const seasonYear = data ? seasonStartYearForDate(data.session.playedOn) : seasonStartYearForDate(new Date().toISOString().slice(0,10))
-  const analytics = useMemo(() => data ? buildSeasonAnalytics(data.analyticsData, data.season ?? seasonYear, 'ALL') : null, [data, seasonYear])
+  const analytics = useMemo(() => data && !recorder ? buildSeasonAnalytics(data.analyticsData, data.season ?? seasonYear, 'ALL') : null, [data, seasonYear, recorder])
   const ratings = useMemo(() => new Map(analytics?.players.map(row => [row.playerId, row.rating]) ?? []), [analytics])
 
   const split = async () => {
@@ -87,7 +87,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
       <div className="subheading"><span>LIÐASKIPTING</span><strong>Hvernig á að draga?</strong></div>
       <div className="segmented team-count"><button className={teamCount === 2 ? 'active' : ''} onClick={() => changeCount(2)}>2 lið</button><button className={teamCount === 3 ? 'active' : ''} onClick={() => changeCount(3)} disabled={players.length < 6}>3 lið</button></div>
       <div className="split-mode-grid">
-        <button className={`split-mode card ${splitMode==='weighted'?'selected':''}`} onClick={()=>setSplitMode('weighted')}><span>⚖</span><div><strong>Weighted random</strong><small>Random, en leitast við að jafna lið eftir tölfræði tímabilsins.</small></div><b>{splitMode==='weighted'?'✓':''}</b></button>
+        {!recorder && <button className={`split-mode card ${splitMode==='weighted'?'selected':''}`} onClick={()=>setSplitMode('weighted')}><span>⚖</span><div><strong>Weighted random</strong><small>Random, en leitast við að jafna lið eftir tölfræði tímabilsins.</small></div><b>{splitMode==='weighted'?'✓':''}</b></button>}
         <button className={`split-mode card ${splitMode==='full'?'selected':''}`} onClick={()=>setSplitMode('full')}><span>🎲</span><div><strong>Full random</strong><small>Engin tölfræði. Allir fara hreint í pottinn.</small></div><b>{splitMode==='full'?'✓':''}</b></button>
       </div>
       {splitMode==='weighted' && <div className="weight-note">📈 Styrkleikamat notar stig/sett, settsigra og mörk + stoðsendingar á {analytics?.season.name}. Nýir leikmenn byrja á hlutlausu vægi.</div>}
@@ -98,7 +98,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
         <p className="setup-hint">Liðin eru tillaga. Þú getur fært leikmann handvirkt með litapunktunum áður en settið hefst.</p>
         <div className={`team-setup-grid cols-${teamCount}`}>
           {TEAM_PRESETS.slice(0, teamCount).map((team, teamIndex) => <section className="team-column card" key={team.name} style={{ '--team-color': team.color } as React.CSSProperties}>
-            <header><span className="team-dot"/><div><strong>{team.name}</strong><small>{counts[teamIndex]} leikmenn · styrkur {teamStrength(assignments,teamIndex,ratings)}</small></div></header>
+            <header><span className="team-dot"/><div><strong>{team.name}</strong><small>{counts[teamIndex]} leikmenn{!recorder && ` · styrkur ${teamStrength(assignments,teamIndex,ratings)}`}</small></div></header>
             <div className="team-members">
               {players.filter(p => assignments[p.id] === teamIndex).map(player => <div className="assignment-player" key={player.id}><span>{player.name}</span><div className="mini-team-switch">{TEAM_PRESETS.slice(0, teamCount).map((preset, idx) => <button key={preset.name} title={`Færa í ${preset.name}`} className={idx === teamIndex ? 'current' : ''} style={{ background: preset.color }} onClick={() => setAssignments(prev => ({ ...prev, [player.id]: idx }))}/>)}</div></div>)}
             </div>

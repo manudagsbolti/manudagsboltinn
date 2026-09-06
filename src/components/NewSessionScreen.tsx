@@ -6,13 +6,13 @@ import { DEFAULT_RULES } from '../domain/rules'
 import { todayIso } from '../utils/id'
 import { defaultSeasonForDate } from '../domain/seasons'
 
-export function NewSessionScreen({ onCreated, onCancel }: { onCreated: (id: string) => void; onCancel: () => void }) {
+export function NewSessionScreen({ onCreated, onCancel, recordingDate, recordingSeasonId }: { onCreated: (id: string) => void; onCancel: () => void; recordingDate?: string; recordingSeasonId?: string }) {
   const players = useLiveQuery(() => db.players.toArray().then(rows => rows.filter(p => p.isActive)), []) ?? []
   const rolePeriods = useLiveQuery(() => db.rolePeriods.toArray(), []) ?? []
   const seasons = useLiveQuery(() => db.seasons.toArray(), []) ?? []
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [date, setDate] = useState(todayIso())
-  const [seasonId, setSeasonId] = useState('')
+  const [date, setDate] = useState(recordingDate ?? todayIso())
+  const [seasonId, setSeasonId] = useState(recordingSeasonId ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [quickName, setQuickName] = useState('')
@@ -34,6 +34,7 @@ export function NewSessionScreen({ onCreated, onCancel }: { onCreated: (id: stri
     if (selectedCount < 4 || busy) return
     setBusy(true); setError('')
     try {
+    if (recordingDate && !persistedSeason) throw new Error('Sæktu kvöldið á forsíðunni áður en mæting er valin.')
     const session = await createSession({ seasonId: persistedSeason?.id, playedOn: date, playerIds: [...selected], gameDurationSeconds: DEFAULT_RULES.gameDurationSeconds, winsPerPoint: DEFAULT_RULES.winsPerPoint, pointsToWinSet: DEFAULT_RULES.pointsToWinSet })
     onCreated(session.id)
     } catch (e) { setError(e instanceof Error ? e.message : 'Vistun mistókst.') } finally { setBusy(false) }
@@ -42,8 +43,10 @@ export function NewSessionScreen({ onCreated, onCancel }: { onCreated: (id: stri
   return <section className="screen page-screen wizard-screen">
     <button className="back-button" onClick={onCancel}>← Til baka</button>
     <div className="section-heading"><div><span className="eyebrow">NÝR LEIKDAGUR</span><h1>Hverjir mæta?</h1></div><span className="count-badge accent">{selectedCount} valdir</span></div>
-    <div className="date-row card"><div><label>Dagsetning</label><small className="season-inline">Tímabil {persistedSeason?.name ?? season?.name ?? 'Sumarfrí'}</small></div><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-    <label className="field">Önn<select value={seasonId} onChange={e => setSeasonId(e.target.value)}><option value="">Sjálfvirkt eftir dagsetningu</option>{seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    {recordingDate ? <p>Dagsetning: {recordingDate}</p> : <>
+      <div className="date-row card"><div><label>Dagsetning</label><small className="season-inline">Tímabil {persistedSeason?.name ?? season?.name ?? 'Sumarfrí'}</small></div><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+      <label className="field">Önn<select value={seasonId} onChange={e => setSeasonId(e.target.value)}><option value="">Sjálfvirkt eftir dagsetningu</option>{seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    </>}
     {error && <p role="alert" className="warning-banner">{error}</p>}
     <div className="select-tools"><button onClick={() => setSelected(allSelected ? new Set() : new Set(players.map(p => p.id)))}>{allSelected ? 'Afvelja alla' : 'Velja alla'}</button></div>
     <div className="attendance-grid">

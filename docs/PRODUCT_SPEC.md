@@ -393,6 +393,32 @@ V1 assumes one active live recorder device at a time. Real-time multi-device col
 
 ## 15. PWA and hosting
 
+### Shared recording access (confirmed September 2026)
+
+The public app opens on a password gate. For the initial group deployment,
+recorders use one shared password; the administrator uses a separate personal
+account. Supabase Auth verifies passwords in the backend. No database settings,
+Supabase dashboard access, email verification or individual recorder account
+setup is required of the players using the shared login.
+
+The administrator opens one recording date and selects its season. Shared
+recorders can select attendance, add a new substitute, set up teams, operate the
+live recorder and see that night's summary. They cannot read other nights,
+season standings, analytics, player ratings, backups of historical data or
+administrative settings. These restrictions apply to backend APIs and raw
+tables as well as UI routes. Only the administrator decides when to distribute
+season results; no automatic publication is introduced here.
+
+App access roles (administrator/recorder) are independent of REGULAR/SUBSTITUTE
+player status. Shared recording does not identify which individual made a change.
+One recorder device is used at a time. The recording window stays open until
+the administrator closes or changes it; first synchronize the recording device.
+
+First use requires a network connection to authenticate and download the roster
+and recording context. Previously authorized local recording and recovery must
+remain available offline. Logout/account/window changes must preserve unsent
+changes and remove cached historical data before a different scope is opened.
+
 V1 is a web app/PWA, not a native App Store/Play Store application.
 
 Baseline stack:

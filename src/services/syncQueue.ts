@@ -1,10 +1,7 @@
 import { db, type SyncQueueItem } from '../db/localDb'
 import { supabase } from '../lib/supabase'
-
-const CONFLICT_KEYS: Record<SyncQueueItem['table'], string> = {
-  players: 'id', seasons: 'id', sessions: 'id', session_players: 'session_id,player_id', sets: 'id',
-  player_role_periods: 'id', session_backfills: 'session_id', set_teams: 'id', set_team_members: 'team_id,player_id', games: 'id', goals: 'id', timer_events: 'id',
-}
+import { withSyncLock } from './syncLock'
+import { toSnakeCase } from './syncData'
 
 export async function enqueueSync(item: Omit<SyncQueueItem, 'attempts'>): Promise<void> {
   const last = await db.syncQueue.orderBy('createdAt').last()
@@ -14,45 +11,37 @@ export async function enqueueSync(item: Omit<SyncQueueItem, 'attempts'>): Promis
 
 let inFlight: Promise<{ synced: number; failed: number }> | null = null
 export function flushSyncQueue(): Promise<{ synced: number; failed: number }> {
-  if (!inFlight) inFlight = flush().finally(() => { inFlight = null })
+  if (!supabase || !navigator.onLine) return Promise.resolve({ synced: 0, failed: 0 })
+  if (!inFlight) inFlight = withSyncLock(flushSyncQueueUnlocked).finally(() => { inFlight = null })
   return inFlight
 }
 
-async function flush(): Promise<{ synced: number; failed: number }> {
+// Call only while holding the cloud lock. The server commits the whole batch
+// and recovery snapshots, or none of it. Receipt IDs make lost replies safe.
+export async function flushSyncQueueUnlocked(): Promise<{ synced: number; failed: number }> {
   if (!supabase || !navigator.onLine) return { synced: 0, failed: 0 }
-  const { data: auth } = await supabase.auth.getSession()
-  if (!auth.session) return { synced: 0, failed: 0 }
-
+  const { data: auth, error: authError } = await supabase.auth.getSession()
+  if (authError || !auth.session) return { synced: 0, failed: 0 }
   const items = await db.syncQueue.orderBy('createdAt').toArray()
-  let synced = 0
-  let failed = 0
-
-  for (const item of items) {
-    try {
-      const { error } = item.operation === 'delete'
-        ? await supabase.from(item.table).delete().eq('id', item.entityId)
-        : await supabase.from(item.table).upsert(toSnakeCase(item.payload) as Record<string, unknown>, {
-        onConflict: CONFLICT_KEYS[item.table],
-      })
-      if (error) throw error
-      await db.syncQueue.delete(item.id)
-      synced++
-    } catch (error) {
-      failed++
-      await db.syncQueue.update(item.id, {
+  if (!items.length) return { synced: 0, failed: 0 }
+  try {
+    const { error } = await supabase.rpc('apply_sync_batch', {
+      operations: items.map(item => toSnakeCase({
+        id: item.id, table: item.table, entityId: item.entityId,
+        operation: item.operation, payload: item.payload,
+      })),
+    })
+    if (error) throw error
+    // Never clear changes created while this batch was travelling.
+    await db.syncQueue.bulkDelete(items.map(item => item.id))
+    return { synced: items.length, failed: 0 }
+  } catch {
+    await db.transaction('rw', db.syncQueue, async () => {
+      for (const item of items) await db.syncQueue.update(item.id, {
         attempts: item.attempts + 1,
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: 'Samstilling mistókst. Gögn eru örugg á tækinu; athugaðu net, aðgang og Supabase uppsetningu.',
       })
-      break // Preserve dependency and undo ordering on retry.
-    }
+    })
+    return { synced: 0, failed: items.length }
   }
-  return { synced, failed }
-}
-
-function toSnakeCase(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(toSnakeCase)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-    key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`), toSnakeCase(nested),
-  ]))
 }

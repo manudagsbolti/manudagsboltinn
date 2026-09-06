@@ -13,17 +13,21 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 
 ## 2. Supabase
 
-1. Stofna project.
-2. Opna **SQL Editor** og keyra allar skrár í `supabase/migrations` í númeraröð. Þær migrations samsvara virka Dexie/sync gagnalíkaninu.
-3. Undir **Authentication > Users** velurðu **Add user / Send invitation** á þitt netfang og klárar boðið þannig að notandinn fái lykilorð.
-4. Afrita `User UID` notandans úr Authentication > Users. Opna SQL Editor og keyra:
+### Nýr, tómur grunnur
+
+1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–008 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
+4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 
 ```sql
-insert into public.app_admins(user_id) values ('SETTU-USER-UID-HÉR');
+insert into public.app_admins(user_id)
+values ('SETTU-USER-UID-HÉR')
+on conflict (user_id) do nothing;
 ```
 
 Þetta er viljandi allow-list: það er ekki nóg að vera bara Supabase Auth notandi til að lesa/skrifa boltann.
-5. Mælt er með að slökkva á opinni nýskráningu í Auth settings þegar admin er kominn upp.
+5. Hafa **Allow new users to sign up** óvirkt í Authentication stillingum. Ekki opna nýskráningu til að leysa aðgangsvillu; staðfesta frekar UID í `app_admins`.
 6. Finna Project URL og **Publishable key** í Connect / Settings > API Keys.
 7. Búa til `.env.local` í root:
 
@@ -33,9 +37,79 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
 8. Endurræsa `npm run dev`.
-9. Fara í **Stjórnun > Ský & sync**, skrá inn og velja `Sync núna`.
+9. Fara í **Sync**, skrá inn og velja `Sync núna`. Breytingar sem eru í bið sendast líka sjálfkrafa við innskráningu, endurtengingu og á 30 sekúndna fresti. Sækja gögn úr skýinu er handvirk aðgerð.
 
 Ath: publishable key má vera í frontend. Aldrei setja `service_role` key í þetta app.
+
+### Grunnur með app-töflum
+
+Keyra aðeins migrations sem hafa ekki verið keyrðar, í númeraröð. Ekki nota `database/schema.sql`, sem tilheyrir eldra, óvirku appi. Migration 007 bætir við `app_admins`, herðir RLS, lokar eldri tölfræðiviews fyrir frontend og býr til `apply_sync_batch`, `get_sync_state`, `sync_operations` og `session_snapshots`. Stjórnandi þarf alltaf færslu í `app_admins`, líka þegar hann var áður innskráður.
+
+### Sameiginlegt lykilorð fyrir strákana
+
+Ef fyrri uppsetning (001–007) er þegar komin í Supabase, keyra **aðeins**
+`supabase/migrations/008_shared_recording_access.sql` í SQL Editor.
+Ekki endurkeyra `setup-empty-project.sql` á þeim grunni.
+
+1. Í **Authentication → Users → Add user → Create new user** stofna
+   `skraning@manudagsboltinn.com` með sameiginlega lykilorðinu sem þú velur.
+   Velja **Auto Confirm User**. Þetta er fast auðkenni sameiginlegs app-aðgangs;
+   strákarnir þurfa ekki að opna þetta pósthólf. Enginn póstur er sendur af appinu.
+2. Afrita UID þess notanda og keyra í SQL Editor:
+
+   ```sql
+   insert into public.app_recorders(user_id)
+   values ('UID-SAMEIGINLEGA-NOTANDANS')
+   on conflict (user_id) do nothing;
+   ```
+
+   Þessi notandi á **ekki** að vera í `app_admins`. Þinn eigin aðgangur helst þar.
+3. Opna appið, velja **Stjórnandaaðgangur** og skrá inn með þínu netfangi/lykilorði.
+4. Stofna/breyta önn undir **Leikmenn → Annir** ef þarf. Fara í **Sync → Aðgangur
+   að leikskráningu**, velja dagsetningu og önn, haka við **Opna fyrir skráningu**
+   og velja **Vista aðgang**. Dagsetning verður að vera innan annarinnar.
+5. Strákarnir opna sömu slóð og slá aðeins inn sameiginlega lykilorðið.
+   Fyrsta innskráning sækir leikmannalista og gögn opna kvöldsins. Eftir það
+   opnar tækið yfirleitt vistuðu aðgangslotuna. Hnappur á forsíðu sækir/samstillir.
+
+Þeir geta valið mætingu, bætt við nýjum varamanni, raðað í lið og skráð kvöldið.
+Annir, eldri kvöld, tölfræðisíður, styrkleikamat og stjórnunarverkfæri eru ekki
+aðgengileg. RLS og RPC staðfesta sömu takmarkanir í gagnagrunninum.
+
+Sameiginlega lykilorðið er ekki í `.env.local`, Git eða JavaScript-búntinum.
+Það er lykilorð staðfests Supabase Auth notanda. Breyta því í Auth-stjórnun
+þegar þarf. Til að loka strax fyrir skýjaskrif má loka skráningarglugganum í
+appinu eða fjarlægja UID úr `app_recorders`; þegar útgefnar aðgangslotur verða
+ógildar þarf að skrá inn aftur. Að breyta lykilorði einu og sér er ekki loforð
+um að öll þegar innskráð tæki missi aðgang samstundis.
+
+Hafa eitt skráningartæki í einu og samstilla áður en skipt er um tæki, kvöld
+eða aðgang. Ósendar breytingar hindra útskráningu og skipti um aðgang/glugga
+á viðkomandi tæki. Ef stjórnandi lokaði glugganum of snemma, opna sömu
+dagsetningu/önn aftur svo tækið geti sent gögnin. Offline gögn eru varðveitt.
+
+Í production er appið lokað ef Supabase-stillingar vantar. Local-only þróun
+án stillinga er áfram leyfð með `npm run dev`. Aðgangsbreytingarnar þurfa
+endurræsingu á dev server eða nýtt production build.
+
+### Prófun með tveimur aðgöngum
+
+- Prófa stjórnanda í einum vafra og sameiginlega aðganginn í öðrum.
+- Opna `#/stats`, `#/players`, `#/cloud` og `#/presentation/...` sem skráningaraðili:
+  appið sýnir aðeins skráningarforsíðuna. Eldri gögn eiga ekki að vera í local DB.
+- Prófa Start/mark/Undo offline, tengjast aftur og staðfesta gögn sem stjórnandi.
+- Staðfesta að samantekt kvöldsins sé aðgengileg en engin annartölfræði birtist.
+
+- Skrá prófkvöld offline, með marki/stoðsendingu og sjálfsmarki. Tengjast aftur; biðröðin á að tæmast.
+- Skoða `sessions`, `games`, `goals` og `session_snapshots` í Table Editor. Snapshot er endurheimtuafrit af hráum staðreyndum; tölfræði er enn reiknuð úr staðreyndum.
+- Undo eftir fjórða sigur á að fjarlægja næsta tilbúna sett/leik í skýinu og merkja afturkallað mark með `deleted_at`.
+- Opna annan vafra, skrá inn og velja `Sync núna`: sama saga/samantekt birtist. RUNNING leikur endurheimtist PAUSED þegar live skjár er opnaður. Undo-sagan er aðeins á upprunalega tækinu.
+- Ekki skrá sama leik samtímis á tveimur tækjum. Samstilla bæði áður en skipt er um skráningartæki.
+- Ef skráning heldur áfram meðan gögn eru sótt, heldur appið local breytingunum og frestar niðurhalinu. Velja aftur `Sync núna` þegar hlé er á skráningu.
+
+Tengingarvillu má greina án þess að birta lykla: athuga að project sé virkt, migration 007 sé komin inn og rétt Auth UID sé í `app_admins`. Ekki afrita innihald `.env.local` í samtöl eða Git.
+
+Ef eldri local gögn eru til en engar sendingar í bið og nýr skýjagrunnur er alveg tómur, stöðvar appið niðurhal í stað þess að eyða gögnunum. Velja **Export backup**, varðveita skrána, svo **Restore backup** með sömu skrá og **Sync núna**. Restore setur hrá gögn í rétta sendingarröð en flytur ekki Undo-sögu.
 
 ## 3. Fyrsta önnin
 

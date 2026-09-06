@@ -13,6 +13,10 @@ Cloudflare secrets and does not deploy the app.
 - `src/domain/*.test.ts`: rotation, first-to-four, timer precision, roster validation and season defaults.
 - `src/data/repository.test.ts`: actual Dexie command path, unequal teams, goals/assists/own goals, timeout choice, set continuity, duplicate commands, Undo across a set boundary, ten games offline, reopen/recovery, immutable role snapshots, transaction rollback, completion and summary totals.
 - `src/components/liveFlow.test.ts`: React goal-selection pause, assist save, first-timeout dialog/buzzer invocation, fourth-win reset/Undo, finish/cancel, and required summary columns.
+- `src/services/cloudSync.test.ts`: actual PostgreSQL migrations via PGlite plus the real Dexie command path. Tests the generated empty-project SQL, admin/anonymous/non-admin permissions, no self-promotion, atomic batch rollback, lost-response retry receipts, snapshots, fourth-win Undo, two-team own goals, timer precision, role snapshots on fresh-device recovery, concurrent local changes/deletes during pull, malformed payload rollback, and unchanged-round-trip Undo.
+- `src/services/autoSync.test.ts`: startup/sign-in/reconnect/interval retry and listener cleanup.
+- `src/services/access.test.ts` and `src/components/accessFlow.test.ts`: shared-password entry, separate admin login, denied credentials, direct hash-route guards, offline cached access, no account switching/logout with pending writes, and removal of cached admin history.
+- Recorder PostgreSQL tests: only open-night data returned; deny history mutations, season/role/snapshot reads, access-window changes and self-promotion; permit new substitutes, scoped goals and Undo; preserve role snapshots and apply revocation server-side.
 - Real device sound, wake lock, installed app shell and real Supabase reconciliation remain manual acceptance checks. A passing unit/DOM suite does not certify those scenarios.
 
 ## Finishing and seasons

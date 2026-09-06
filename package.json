@@ -9,7 +9,8 @@
     "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "supabase:setup": "node scripts/supabase-setup.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
@@ -19,6 +20,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.0",

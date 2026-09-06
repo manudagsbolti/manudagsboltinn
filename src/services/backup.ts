@@ -43,7 +43,8 @@ export async function restoreBackup(file: File): Promise<{ sessions: number; goa
   const raw = JSON.parse(await file.text()) as BackupPayload
   if (raw.kind !== 'manudagsboltinn-backup' || raw.schemaVersion !== 1 || !raw.data) throw new Error('Þetta lítur ekki út eins og gilt Mánudagsboltinn backup.')
   const d = raw.data as any
-  await db.transaction('rw', [db.players, db.seasons, db.rolePeriods, db.sessions, db.sessionPlayers, db.sessionBackfills, db.sets, db.setTeams, db.setTeamMembers, db.games, db.goals, db.timerEvents, db.syncQueue], async () => {
+  await db.transaction('rw', [db.players, db.seasons, db.rolePeriods, db.sessions, db.sessionPlayers, db.sessionBackfills, db.sets, db.setTeams, db.setTeamMembers, db.games, db.goals, db.timerEvents, db.syncQueue, db.undoActions], async () => {
+    await db.undoActions.clear()
     await Promise.all([db.players.clear(),db.seasons.clear(),db.rolePeriods.clear(),db.sessions.clear(),db.sessionPlayers.clear(),db.sessionBackfills.clear(),db.sets.clear(),db.setTeams.clear(),db.setTeamMembers.clear(),db.games.clear(),db.goals.clear(),db.timerEvents.clear(),db.syncQueue.clear()])
     if (d.players?.length) await db.players.bulkPut(d.players)
     if (d.seasons?.length) await db.seasons.bulkPut(d.seasons)
@@ -65,7 +66,8 @@ export async function restoreBackup(file: File): Promise<{ sessions: number; goa
 
 function makeQueue(d:any): SyncQueueItem[] {
   const rows: SyncQueueItem[] = []
-  const add = (table:SyncQueueItem['table'], entityId:string, payload:unknown) => rows.push({id:id(),table,entityId,operation:'upsert',payload,createdAt:nowIso(),attempts:0,lastError:null})
+  const firstTimestamp = Date.now()
+  const add = (table:SyncQueueItem['table'], entityId:string, payload:unknown) => rows.push({id:id(),table,entityId,operation:'upsert',payload,createdAt:new Date(firstTimestamp + rows.length).toISOString(),attempts:0,lastError:null})
   for (const x of d.players??[]) add('players',x.id,x)
   for (const x of d.seasons??[]) add('seasons',x.id,x)
   for (const x of d.rolePeriods??[]) add('player_role_periods',x.id,x)
