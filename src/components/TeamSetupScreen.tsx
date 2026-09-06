@@ -21,12 +21,13 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
     const sets = await db.sets.where('sessionId').equals(sessionId).sortBy('setNo')
     return {
       session,
+      season: session.seasonId ? await db.seasons.get(session.seasonId) : undefined,
       players: players as NonNullable<(typeof players)[number]>[],
       setNo: sets.length + 1,
       analyticsData: {
         players: await db.players.toArray(), sessions: await db.sessions.toArray(), attendance: await db.sessionPlayers.toArray(),
         sets: await db.sets.toArray(), teams: await db.setTeams.toArray(), memberships: await db.setTeamMembers.toArray(),
-        games: await db.games.toArray(), goals: await db.goals.toArray(),
+        games: await db.games.toArray(), goals: await db.goals.toArray(), backfills: await db.sessionBackfills.toArray(),
       },
     }
   }, [sessionId])
@@ -43,7 +44,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
   }, [players.length, seededCount])
 
   const seasonYear = data ? seasonStartYearForDate(data.session.playedOn) : seasonStartYearForDate(new Date().toISOString().slice(0,10))
-  const analytics = useMemo(() => data ? buildSeasonAnalytics(data.analyticsData, seasonYear) : null, [data, seasonYear])
+  const analytics = useMemo(() => data ? buildSeasonAnalytics(data.analyticsData, data.season ?? seasonYear, 'ALL') : null, [data, seasonYear])
   const ratings = useMemo(() => new Map(analytics?.players.map(row => [row.playerId, row.rating]) ?? []), [analytics])
 
   const split = async () => {
@@ -61,7 +62,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
   const changeCount = (count: number) => { setTeamCount(count); setAssignments({}); setStage('roster') }
   const counts = Array.from({ length: teamCount }, (_, team) => Object.values(assignments).filter(x => x === team).length)
   const unassigned = players.filter(p => assignments[p.id] === undefined)
-  const balanced = counts.length > 0 && Math.max(...counts) - Math.min(...counts) <= 1 && unassigned.length === 0
+  const balanced = counts.every(count => count > 0) && unassigned.length === 0
   const balance = balanced ? assignmentBalance(assignments, teamCount, ratings) : 0
 
   const confirm = async () => {
@@ -103,7 +104,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel }: { sessionId: s
             </div>
           </section>)}
         </div>
-        {!balanced && <div className="warning-banner">⚠ Liðin þurfa að vera nokkurn veginn jafnstór.</div>}
+        {!balanced && <div className="warning-banner">Öll lið þurfa leikmenn og hver leikmaður þarf lið. Lið mega vera misstór.</div>}
         <div className="start-order card"><strong>Upphafsröð</strong><div>{TEAM_PRESETS.slice(0, teamCount).map((team, i) => <span key={team.name}><b style={{ background: team.color }}/>{i === 0 ? `${team.name} inni` : i === 1 ? `${team.name} áskorandi` : `${team.name} bíður`}</span>)}</div></div>
         <div className="sticky-action"><button className="primary jumbo" disabled={!balanced} onClick={() => void confirm()}>Byrja Sett {data.setNo} <span>→</span></button></div>
       </>}

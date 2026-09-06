@@ -1,0 +1,308 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { db } from '../db/localDb'
+import { DEFAULT_RULES, currentRemainingSeconds, getSetWinner } from '../domain/rules'
+import { calculateSessionPlayerStats } from '../services/stats'
+import { buildSeasonAnalytics } from '../services/seasonAnalytics'
+import { buildSessionSummary, type SummaryData } from '../services/sessionSummary'
+import { completeSession, saveSeason } from './repository'
+import { createSession, createSet, startGame, pauseGame, resumeGame, recordGoal, timeoutGame, createNextGame, recoverRunningGames, undoLastScoringAction, setPlayerRole } from './repository'
+
+const epoch = Date.parse('2026-09-07T20:00:00Z')
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(epoch)
+  await db.open()
+  await db.transaction('rw', db.tables, async () => { for (const table of db.tables) await table.clear() })
+})
+
+async function summaryData(sessionId: string): Promise<SummaryData> {
+  return { session: (await db.sessions.get(sessionId))!, attendance: await db.sessionPlayers.toArray(), players: await db.players.toArray(), sets: await db.sets.toArray(), teams: await db.setTeams.toArray(), memberships: await db.setTeamMembers.toArray(), games: await db.games.toArray(), goals: await db.goals.toArray() }
+}
+
+describe('night completion and derived summary', () => {
+  it('finishes mid-set offline, freezes the timer, retains facts, and is idempotent', async () => {
+    const { session, set } = await setup([4,4])
+    await score(session.id)
+    const game = await latest(session.id)
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 12_500)
+    await completeSession(session.id)
+    expect(await db.games.get(game.id)).toMatchObject({ status:'paused', remainingSeconds:167.5 })
+    expect(await db.sets.get(set.id)).toMatchObject({ status:'live', winningTeamId:null })
+    const closed = await db.sessions.get(session.id)
+    expect(closed?.status).toBe('completed')
+    vi.setSystemTime(epoch + 200_000)
+    await completeSession(session.id)
+    await resumeGame(game.id)
+    expect(await db.sessions.get(session.id)).toEqual(closed)
+    expect((await db.games.get(game.id))?.status).toBe('paused')
+    const summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary).toMatchObject({ miniGames:1, completedSets:0, goals:1, unfinishedGame:true })
+    expect(summary.players).toHaveLength(8)
+    expect(summary.players.find(p => p.playerId === '0-0')).toMatchObject({ miniGames:1, smallWins:1, setWins:0, goals:1, assists:0, contributions:1 })
+  })
+  it('includes every player and team with known zeros when nothing was played', async () => {
+    const { session } = await setup()
+    await completeSession(session.id)
+    const summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary.players).toHaveLength(13)
+    expect(summary.players.every(p => p.miniGames === 0 && p.setWins === 0 && p.contributions === 0)).toBe(true)
+    expect(summary.teams.map(t => t.members.length)).toEqual([4,4,5])
+    expect(summary.playedSets).toHaveLength(0)
+  })
+  it('summarizes own goals separately and excludes waiting teams and deleted goals', async () => {
+    const { session, teams, game } = await setup()
+    await startGame(game.id)
+    await recordGoal({gameId:game.id,teamId:teams[0].id,scorerPlayerId:'1-0',eventType:'OWN_GOAL'})
+    let summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary.players.find(p => p.playerId === '1-0')).toMatchObject({ goals:0, ownGoals:1, contributions:0, miniGames:1 })
+    expect(summary.players.find(p => p.playerId === '2-0')?.miniGames).toBe(0)
+    expect(summary.teams.find(t => t.name === 'A')).toMatchObject({ wins:1, goals:1, games:1 })
+    await undoLastScoringAction(session.id)
+    summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary.goals).toBe(0)
+    expect(summary.players.every(p => p.goals === 0 && p.ownGoals === 0)).toBe(true)
+  })
+  it('totals consecutive sets without counting the unstarted prepared set', async () => {
+    const {session} = await setup([4,4])
+    for(let n=0;n<8;n++) await score(session.id)
+    await completeSession(session.id)
+    const summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary).toMatchObject({miniGames:8,completedSets:2,goals:8})
+    expect(summary.playedSets).toHaveLength(2)
+    expect(summary.teams).toHaveLength(2)
+    expect(summary.teams.find(t => t.name === 'A')).toMatchObject({wins:8,sets:2,goals:8,games:8})
+    expect(summary.players.find(p => p.playerId === '0-1')).toMatchObject({assists:8,contributions:8,setWins:2,miniGames:8,smallWins:8})
+  })
+  it('rolls back the entire scoring command if the outbox cannot be persisted', async () => {
+    const {session,game,teams} = await setup()
+    await startGame(game.id)
+    const fail = () => { throw new Error('Disk full') }
+    db.syncQueue.hook('creating', fail)
+    try {
+      await expect(recordGoal({gameId:game.id,teamId:teams[0].id,scorerPlayerId:'0-0'})).rejects.toThrow('Disk full')
+    } finally { db.syncQueue.hook('creating').unsubscribe(fail) }
+    expect(await db.goals.count()).toBe(0)
+    expect(await latest(session.id)).toMatchObject({id:game.id,status:'live'})
+    expect(await db.undoActions.count()).toBe(0)
+  })
+  it('undo removes a newly started next game and its timer facts', async () => {
+    const {session,game} = await setup()
+    await score(session.id)
+    const next = await latest(session.id)
+    await startGame(next.id)
+    await undoLastScoringAction(session.id)
+    expect(await db.games.get(next.id)).toBeUndefined()
+    expect(await db.timerEvents.where('gameId').equals(next.id).count()).toBe(0)
+    expect(await latest(session.id)).toMatchObject({id:game.id,status:'paused'})
+    const queue = await db.syncQueue.orderBy('createdAt').toArray()
+    expect(queue.some(q => q.entityId === next.id && q.operation === 'delete')).toBe(true)
+    expect(new Set(queue.map(q => q.createdAt)).size).toBe(queue.length)
+  })
+  it('editable season dates do not move historical membership or role snapshots', async () => {
+    const {session} = await setup()
+    await score(session.id)
+    await completeSession(session.id)
+    const saved = await saveSeason({id:session.seasonId!,name:'Custom autumn',startsOn:'2026-10-01',endsOn:'2026-12-20'})
+    expect((await db.sessions.get(session.id))?.seasonId).toBe(saved.id)
+    expect((await db.sessionPlayers.get([session.id,'0-0']))?.roleAtSession).toBe('SUBSTITUTE')
+    const data = await summaryData(session.id)
+    expect(buildSeasonAnalytics({...data,sessions:[data.session]},saved,'SUBSTITUTE').players.find(p => p.playerId === '0-0')?.goals).toBe(1)
+    const summer = await saveSeason({name:'Summer exception',startsOn:'2027-06-01',endsOn:'2027-06-30'})
+    expect((await createSession({seasonId:summer.id,playedOn:'2027-06-07',playerIds:['0-0'],...DEFAULT_RULES})).seasonId).toBe(summer.id)
+    await expect(createSession({seasonId:summer.id,playedOn:'2027-07-07',playerIds:[],...DEFAULT_RULES})).rejects.toThrow()
+  })
+})
+afterEach(() => { vi.useRealTimers() })
+
+async function setup(sizes = [4, 4, 5], playedOn = '2026-09-07') {
+  const drafts = sizes.map((size, index) => ({ name: ['A', 'B', 'C'][index], color: '#fff', playerIds: Array.from({ length: size }, (_, p) => `${index}-${p}`) }))
+  const session = await createSession({ playedOn, playerIds: drafts.flatMap(t => t.playerIds), ...DEFAULT_RULES })
+  const set = await createSet(session.id, drafts)
+  const teams = await db.setTeams.where('setId').equals(set.id).sortBy('sortOrder')
+  return { session, set, teams, drafts, game: (await db.games.where('setId').equals(set.id).first())! }
+}
+async function latest(sessionId: string) {
+  const set = (await db.sets.where('sessionId').equals(sessionId).sortBy('setNo')).at(-1)!
+  return (await db.games.where('setId').equals(set.id).sortBy('gameNo')).at(-1)!
+}
+async function score(sessionId: string, teamIndex = 0, assist = true) {
+  const game = await latest(sessionId)
+  await startGame(game.id)
+  const teams = await db.setTeams.where('setId').equals(game.setId).sortBy('sortOrder')
+  await recordGoal({ gameId: game.id, teamId: teams[teamIndex].id, scorerPlayerId: `${teamIndex}-0`, assistPlayerId: assist ? `${teamIndex}-1` : null })
+  return game
+}
+
+describe('persisted V1 game engine', () => {
+  it('rejects an early timeout and late goal without changing facts', async () => {
+    const {game,teams} = await setup()
+    await startGame(game.id)
+    await expect(timeoutGame(game.id,teams[0].id)).rejects.toThrow()
+    vi.setSystemTime(epoch+180_000)
+    await expect(recordGoal({gameId:game.id,teamId:teams[0].id,scorerPlayerId:'0-0'})).rejects.toThrow()
+    expect(await db.goals.count()).toBe(0)
+    expect((await db.games.get(game.id))?.status).toBe('live')
+  })
+  it('recovers an expired running clock as paused without inventing timeout or rotation', async () => {
+    const {session,game} = await setup()
+    await startGame(game.id)
+    vi.setSystemTime(epoch+240_000)
+    await recoverRunningGames(session.id)
+    expect(await db.games.get(game.id)).toMatchObject({status:'paused',remainingSeconds:0,endReason:null})
+    expect(await db.games.count()).toBe(1)
+  })
+  it.each([[4,4], [5,5], [4,4,4], [4,4,5], [5,4,4], [5,5,5], [3,6,4]])('accepts flexible rosters %j', async (...sizes) => {
+    const { set, game } = await setup(sizes)
+    expect(await db.setTeamMembers.where('setId').equals(set.id).count()).toBe(sizes.reduce((a,b) => a+b, 0))
+    expect(game).toMatchObject({ status: 'ready', remainingSeconds: 180, incumbentTeamId: null })
+  })
+  it.each([0, 1])('winner %i stays; loser waits; next game is READY', async index => {
+    const { session, teams } = await setup()
+    await score(session.id, index)
+    expect(await latest(session.id)).toMatchObject({ status: 'ready', remainingSeconds: 180, holderTeamId: teams[index].id, challengerTeamId: teams[2].id, waitingTeamId: teams[1-index].id, incumbentTeamId: teams[index].id, timerStartedAt: null })
+    expect(await db.goals.toArray()).toEqual([expect.objectContaining({ scorerPlayerId: `${index}-0`, assistPlayerId: `${index}-1`, eventType: 'GOAL' })])
+  })
+  it('two-team goals and timeouts never rotate or record an outgoing team', async () => {
+    const { session, teams } = await setup([4,4])
+    const first = await score(session.id, 1, false)
+    expect(await db.games.get(first.id)).toMatchObject({ exitingTeamId: null })
+    let game = await latest(session.id)
+    expect(game).toMatchObject({ holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: null, incumbentTeamId: null, status: 'ready' })
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 180_000)
+    await timeoutGame(game.id)
+    game = await latest(session.id)
+    expect(game).toMatchObject({ holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: null, status: 'ready', remainingSeconds: 180 })
+    expect((await db.games.toArray()).filter(g => g.winningTeamId)).toHaveLength(1)
+  })
+  it.each([0,1])('first timeout requires valid manual outgoing choice %i', async index => {
+    const { game, teams, session } = await setup()
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 180_000)
+    await expect(timeoutGame(game.id)).rejects.toThrow()
+    await expect(timeoutGame(game.id, teams[2].id)).rejects.toThrow()
+    expect(await db.games.get(game.id)).toMatchObject({ status: 'live' })
+    await timeoutGame(game.id, teams[index].id)
+    expect(await latest(session.id)).toMatchObject({ status: 'ready', holderTeamId: teams[1-index].id, challengerTeamId: teams[2].id, waitingTeamId: teams[index].id, incumbentTeamId: teams[1-index].id })
+  })
+  it('timeout removes the known incumbent without awarding a win', async () => {
+    const { session, teams } = await setup()
+    await score(session.id)
+    const game = await latest(session.id)
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 180_000)
+    await timeoutGame(game.id)
+    expect(await latest(session.id)).toMatchObject({ holderTeamId: teams[2].id, challengerTeamId: teams[1].id, waitingTeamId: teams[0].id, incumbentTeamId: teams[2].id })
+    expect(await db.games.get(game.id)).toMatchObject({ winningTeamId: null, endReason: 'timeout' })
+  })
+  it('pause/resume retains fractional seconds through repeated pauses', async () => {
+    const { game } = await setup()
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 1250)
+    await pauseGame(game.id)
+    expect((await db.games.get(game.id))!.remainingSeconds).toBe(178.75)
+    vi.setSystemTime(epoch + 61_250)
+    expect(currentRemainingSeconds((await db.games.get(game.id))!)).toBe(178.75)
+    await resumeGame(game.id)
+    vi.setSystemTime(epoch + 61_750)
+    await pauseGame(game.id)
+    expect((await db.games.get(game.id))!.remainingSeconds).toBe(178.25)
+  })
+  it('freezes goal selection, supports own goals, excludes self/opponent/waiting assists', async () => {
+    const { game, teams, session } = await setup()
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 2500)
+    await pauseGame(game.id)
+    vi.setSystemTime(epoch + 200_000)
+    for (const input of [
+      { teamId: teams[0].id, scorerPlayerId: '0-0', assistPlayerId: '0-0' },
+      { teamId: teams[0].id, scorerPlayerId: '0-0', assistPlayerId: '1-0' },
+      { teamId: teams[2].id, scorerPlayerId: '2-0' },
+      { teamId: teams[0].id, scorerPlayerId: '2-0', eventType: 'OWN_GOAL' as const },
+      { teamId: teams[0].id, scorerPlayerId: '1-0', assistPlayerId: '0-1', eventType: 'OWN_GOAL' as const },
+    ]) await expect(recordGoal({ gameId: game.id, ...input })).rejects.toThrow()
+    expect(await db.goals.count()).toBe(0)
+    await recordGoal({ gameId: game.id, teamId: teams[0].id, scorerPlayerId: '1-0', eventType: 'OWN_GOAL' })
+    expect(await db.goals.toArray()).toEqual([expect.objectContaining({ secondsElapsed: 2.5, eventType: 'OWN_GOAL', assistPlayerId: null })])
+    expect(await latest(session.id)).toMatchObject({ holderTeamId: teams[0].id, status: 'ready' })
+  })
+  it('four wins close exactly one set and prepare a zero-score set with court continuity', async () => {
+    const { session, set } = await setup()
+    for (let n = 0; n < 3; n++) await score(session.id)
+    expect(await db.sets.get(set.id)).toMatchObject({ status: 'live', winningTeamId: null })
+    await score(session.id)
+    const sets = await db.sets.where('sessionId').equals(session.id).sortBy('setNo')
+    expect(sets.map(s => s.status)).toEqual(['completed', 'live'])
+    const game = await latest(session.id)
+    const teams = await db.setTeams.where('setId').equals(game.setId).sortBy('sortOrder')
+    expect(game).toMatchObject({ status: 'ready', remainingSeconds: 180, holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: teams[2].id, incumbentTeamId: teams[0].id })
+    expect(getSetWinner([game], teams, session)).toBeNull()
+  })
+  it('undo reverses the fourth goal, assist, set win and prepared next set after reopening DB', async () => {
+    const { session, set } = await setup()
+    for (let n=0;n<4;n++) await score(session.id)
+    db.close(); await db.open()
+    expect(await undoLastScoringAction(session.id)).toBe(true)
+    expect(await db.sets.where('sessionId').equals(session.id).count()).toBe(1)
+    expect(await db.sets.get(set.id)).toMatchObject({ status: 'live', winningTeamId: null })
+    expect(await latest(session.id)).toMatchObject({ status: 'paused', gameNo: 4, endReason: null })
+    expect((await db.goals.toArray()).filter(g => !g.deletedAt)).toHaveLength(3)
+    expect(await undoLastScoringAction(session.id)).toBe(false)
+  })
+  it('undo reverses timeout and rotation without manufacturing a goal', async () => {
+    const { game, session, teams } = await setup()
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 180_000)
+    await timeoutGame(game.id, teams[0].id)
+    expect(await undoLastScoringAction(session.id)).toBe(true)
+    expect(await latest(session.id)).toMatchObject({ id: game.id, status: 'paused', incumbentTeamId: null, endReason: null })
+    expect(await db.goals.count()).toBe(0)
+    expect(await db.timerEvents.where('eventType').equals('EXPIRE').count()).toBe(0)
+  })
+  it('duplicate goal and next-game commands cannot create extra events or games', async () => {
+    const { game, session, teams } = await setup()
+    await startGame(game.id)
+    const input = { gameId: game.id, teamId: teams[0].id, scorerPlayerId: '0-0' }
+    await Promise.all([recordGoal(input), recordGoal(input)])
+    await Promise.all([createNextGame(game.id), createNextGame(game.id)])
+    expect(await db.goals.count()).toBe(1)
+    expect(await db.games.count()).toBe(2)
+    expect(await latest(session.id)).toMatchObject({ status: 'ready' })
+  })
+  it('ten games work without network; reload recovers RUNNING as PAUSED and preserves undo/queue', async () => {
+    const fetch = vi.fn(() => { throw new Error('offline') })
+    vi.stubGlobal('fetch', fetch)
+    try {
+      const { session } = await setup()
+      for (let n=0;n<10;n++) await score(session.id)
+      const game = await latest(session.id)
+      await startGame(game.id)
+      vi.setSystemTime(epoch + 12_750)
+      db.close(); await db.open()
+      await recoverRunningGames(session.id)
+      expect(await db.games.get(game.id)).toMatchObject({ status: 'paused', remainingSeconds: 167.25, timerStartedAt: null })
+      vi.setSystemTime(epoch + 60_000)
+      await recoverRunningGames(session.id)
+      expect((await db.games.get(game.id))!.remainingSeconds).toBe(167.25)
+      expect((await db.games.toArray()).filter(g => g.status === 'completed')).toHaveLength(10)
+      expect(await db.syncQueue.count()).toBeGreaterThan(10)
+      expect(fetch).not.toHaveBeenCalled()
+    } finally { vi.unstubAllGlobals() }
+  })
+  it('role promotion changes future snapshots only, including regular/substitute statistics', async () => {
+    const { session } = await setup()
+    await score(session.id)
+    await db.sessions.update(session.id, { status: 'completed' })
+    await setPlayerRole(session.seasonId!, '0-0', 'REGULAR', '2026-09-14')
+    const future = await setup([4,4,5], '2026-09-14')
+    await score(future.session.id)
+    await db.sessions.update(future.session.id, { status: 'completed' })
+    expect(await db.sessionPlayers.get([session.id, '0-0'])).toMatchObject({ roleAtSession: 'SUBSTITUTE' })
+    expect(await db.sessionPlayers.get([future.session.id, '0-0'])).toMatchObject({ roleAtSession: 'REGULAR' })
+    const data = { players: [], sessions: await db.sessions.toArray(), attendance: await db.sessionPlayers.toArray(), sets: await db.sets.toArray(), teams: await db.setTeams.toArray(), memberships: await db.setTeamMembers.toArray(), games: await db.games.toArray(), goals: await db.goals.toArray() }
+    for (const role of ['REGULAR','SUBSTITUTE'] as const) expect(buildSeasonAnalytics(data, 2026, role).players.find(p => p.playerId === '0-0')).toMatchObject({ goals: 1, smallWins: 1 })
+    const stats = calculateSessionPlayerStats({ ...data, playerIds: ['0-0'], ...DEFAULT_RULES })
+    expect(stats[0]).toMatchObject({ goals: 2 })
+  })
+})

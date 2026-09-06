@@ -2,6 +2,10 @@
 
 ## 1. Local
 
+Fyrir local-only keyrslu þarf ekki `.env.local`. Fyrir cloud má afrita tómu `.env.example` yfir í `.env.local` og fylla út á tækinu; ekki vista gildin í Git. `npm ci` endursetur dependencies úr lockfile.
+
+Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá `docs/V1_AUDIT.md` fyrir ólokin síma/cloud acceptance atriði og ósamræmi í eldri uppsetningarleiðbeiningum.
+
 1. Opna repository í VS Code.
 2. Keyra `npm install`.
 3. Keyra `npm run dev`.
@@ -10,7 +14,7 @@
 ## 2. Supabase
 
 1. Stofna project.
-2. Opna **SQL Editor** og keyra allt `database/schema.sql`.
+2. Opna **SQL Editor** og keyra allar skrár í `supabase/migrations` í númeraröð. Þær migrations samsvara virka Dexie/sync gagnalíkaninu.
 3. Undir **Authentication > Users** velurðu **Add user / Send invitation** á þitt netfang og klárar boðið þannig að notandinn fái lykilorð.
 4. Afrita `User UID` notandans úr Authentication > Users. Opna SQL Editor og keyra:
 
@@ -34,6 +38,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 Ath: publishable key má vera í frontend. Aldrei setja `service_role` key í þetta app.
 
 ## 3. Fyrsta önnin
+
+Í virka appinu: **Leikmenn → Annir** til að stofna/breyta önn og **Nýr leikdagur → Önn** til að velja hana. Sjálfgefið er janúar–apríl og september–desember; maí–ágúst er sumarfrí. Sérsniðnar dagsetningar eru leyfðar. Fyrri kvöld halda vistuðu season ID og role snapshoti.
 
 1. Stjórnun -> stofna önn, t.d. `2026 Haust`.
 2. Bæta leikmönnum inn (má líma eitt nafn í línu).

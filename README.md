@@ -1,5 +1,7 @@
 # Mánudagsboltinn — V1.1
 
+V1 rules and current implementation status: [Product specification](docs/PRODUCT_SPEC.md), [architecture](docs/ARCHITECTURE.md), [audit and remaining acceptance checks](docs/V1_AUDIT.md). The older feature notes below include superseded scoring/season assumptions; the product specification is authoritative.
+
 Offline-first PWA fyrir Mánudagsboltann. Þetta build er ætlað sem raunverulegur nothæfur grunnur fyrir leikdag, tímabilstölfræði og kynningu.
 
 ## Leikdagur

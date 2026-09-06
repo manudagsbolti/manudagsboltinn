@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSetTeamStats } from './rules'
+import { buildSetTeamStats, getSetWinner } from './rules'
 import type { Game, SetRecord, SetTeam } from './types'
 
 const now = '2026-08-26T00:00:00Z'
@@ -32,12 +32,15 @@ function wins(teamId: string, count: number, startNo: number): Game[] {
 }
 
 describe('set statistics', () => {
+  it('awards a V1 set on the fourth mini-game win', () => {
+    expect(getSetWinner(wins('blue', 4, 1), teams, { winsPerPoint: 1, pointsToWinSet: 4 })).toBe('blue')
+  })
   it('detects a choke at 3 points and a zero-point set', () => {
     const games = [
-      ...wins('red', 12, 1),
-      ...wins('blue', 16, 20),
+      ...wins('red', 3, 1),
+      ...wins('blue', 4, 20),
     ]
-    const stats = buildSetTeamStats(set, teams, games, { winsPerPoint: 4, pointsToWinSet: 4 })
+    const stats = buildSetTeamStats(set, teams, games, { winsPerPoint: 1, pointsToWinSet: 4 })
     expect(stats.find((x) => x.teamId === 'red')).toMatchObject({ points: 3, isChoke: true })
     expect(stats.find((x) => x.teamId === 'blue')).toMatchObject({ points: 4, isWinner: true })
     expect(stats.find((x) => x.teamId === 'yellow')).toMatchObject({ points: 0, isZeroPointSet: true })

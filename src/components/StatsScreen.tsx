@@ -3,16 +3,17 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
 import { buildSeasonAnalytics, seasonStartYearForDate, seasonYearsFromSessions } from '../services/seasonAnalytics'
 
-export function StatsScreen({ onPresent }: { onPresent: (seasonYear: number) => void }) {
+export function StatsScreen({ onPresent }: { onPresent: (seasonId: string) => void }) {
   const data = useLiveQuery(async () => ({
-    players: await db.players.toArray(), sessions: await db.sessions.toArray(), attendance: await db.sessionPlayers.toArray(),
+    seasons: await db.seasons.orderBy('startsOn').reverse().toArray(), players: await db.players.toArray(), sessions: await db.sessions.toArray(), attendance: await db.sessionPlayers.toArray(),
     sets: await db.sets.toArray(), teams: await db.setTeams.toArray(), memberships: await db.setTeamMembers.toArray(),
-    games: await db.games.toArray(), goals: await db.goals.toArray(),
+    games: await db.games.toArray(), goals: await db.goals.toArray(), backfills: await db.sessionBackfills.toArray(),
   }), [])
   const [tab, setTab] = useState<'table'|'awards'|'records'|'shame'>('table')
-  const [selectedYear, setSelectedYear] = useState<number>(() => seasonStartYearForDate(new Date().toISOString().slice(0,10)))
-  const years = useMemo(() => data ? seasonYearsFromSessions(data.sessions) : [selectedYear], [data, selectedYear])
-  const analytics = useMemo(() => data ? buildSeasonAnalytics(data, selectedYear) : null, [data, selectedYear])
+  const [selectedId, setSelectedId] = useState('')
+  const selectedSeason = data?.seasons.find(s => s.id === selectedId) ?? data?.seasons[0]
+  const [roleFilter, setRoleFilter] = useState<'REGULAR'|'SUBSTITUTE'|'ALL'>('REGULAR')
+  const analytics = useMemo(() => data ? buildSeasonAnalytics(data, selectedSeason ?? seasonStartYearForDate(new Date().toISOString().slice(0,10)), roleFilter) : null, [data, selectedSeason, roleFilter])
 
   if (!data || !analytics) return <section className="screen loading-screen">Hleð tölfræði…</section>
   const playerName = (id?: string) => data.players.find(p => p.id === id)?.name ?? '—'
@@ -23,8 +24,9 @@ export function StatsScreen({ onPresent }: { onPresent: (seasonYear: number) => 
   const topRating=[...analytics.players].sort((a,b)=>b.rating-a.rating)[0]
 
   return <section className="screen page-screen stats-screen">
-    <div className="section-heading"><div><span className="eyebrow">TÍMABIL</span><h1>Tölfræði & verðlaun</h1></div><button className="presentation-button" onClick={()=>onPresent(selectedYear)}>▶ Kynning</button></div>
-    <div className="season-picker card"><div><small>Valið tímabil</small><strong>{analytics.season.name}</strong></div><select value={selectedYear} onChange={e=>setSelectedYear(Number(e.target.value))}>{years.map(y=><option key={y} value={y}>{y}/{String(y+1).slice(-2)}</option>)}</select></div>
+    <div className="section-heading"><div><span className="eyebrow">TÍMABIL</span><h1>Tölfræði & verðlaun</h1></div><button className="presentation-button" onClick={()=>onPresent(selectedSeason?.id ?? String(seasonStartYearForDate(new Date().toISOString().slice(0,10))))}>▶ Kynning</button></div>
+    <div className="season-picker card"><div><small>Valið tímabil</small><strong>{analytics.season.name}</strong></div><select value={selectedSeason?.id ?? ''} onChange={e=>setSelectedId(e.target.value)}>{data.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+    <div className="segmented"><button className={roleFilter==='REGULAR'?'active':''} onClick={()=>setRoleFilter('REGULAR')}>Fastamenn</button><button className={roleFilter==='SUBSTITUTE'?'active':''} onClick={()=>setRoleFilter('SUBSTITUTE')}>Varamenn</button><button className={roleFilter==='ALL'?'active':''} onClick={()=>setRoleFilter('ALL')}>Allir</button></div>
     <div className="season-metrics"><div><b>{analytics.totals.nights}</b><span>kvöld</span></div><div><b>{analytics.totals.sets}</b><span>sett</span></div><div><b>{analytics.totals.goals}</b><span>mörk</span></div><div><b>{analytics.totals.players}</b><span>leikmenn</span></div></div>
     {analytics.players.length > 0 && <div className="leader-cards"><StatLeader icon="🏆" label="Stigakóngur" value={`${topPoints?.points ?? 0} stig`} name={playerName(topPoints?.playerId)}/><StatLeader icon="⚽" label="Markakóngur" value={`${topGoals?.goals ?? 0} mörk`} name={playerName(topGoals?.playerId)}/><StatLeader icon="📈" label="Rating" value={`${topRating?.rating ?? 100}`} name={playerName(topRating?.playerId)}/></div>}
     <div className="segmented stats-tabs"><button className={tab==='table'?'active':''} onClick={()=>setTab('table')}>Tafla</button><button className={tab==='awards'?'active':''} onClick={()=>setTab('awards')}>Verðlaun</button><button className={tab==='records'?'active':''} onClick={()=>setTab('records')}>Met</button><button className={tab==='shame'?'active':''} onClick={()=>setTab('shame')}>😵</button></div>

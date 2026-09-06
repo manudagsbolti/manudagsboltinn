@@ -6,15 +6,9 @@ export interface Rotation {
   waitingTeamId: UUID | null
 }
 
-export function nextRotation(game: Game): Rotation {
+export function nextRotation(game: Game, selectedOutgoingTeamId?: UUID): Rotation {
   if (!game.waitingTeamId) {
-    const holderTeamId = game.endReason === 'goal' && game.winningTeamId
-      ? game.winningTeamId
-      : game.challengerTeamId
-    const challengerTeamId = holderTeamId === game.holderTeamId
-      ? game.challengerTeamId
-      : game.holderTeamId
-    return { holderTeamId, challengerTeamId, waitingTeamId: null }
+    return { holderTeamId: game.holderTeamId, challengerTeamId: game.challengerTeamId, waitingTeamId: null }
   }
 
   if (game.endReason === 'goal' && game.winningTeamId && game.exitingTeamId) {
@@ -25,9 +19,10 @@ export function nextRotation(game: Game): Rotation {
     }
   }
 
-  return {
-    holderTeamId: game.challengerTeamId,
-    challengerTeamId: game.waitingTeamId,
-    waitingTeamId: game.holderTeamId,
+  const outgoing = selectedOutgoingTeamId ?? game.exitingTeamId ?? game.incumbentTeamId
+  if (!outgoing || (outgoing !== game.holderTeamId && outgoing !== game.challengerTeamId)) {
+    throw new Error('Velja þarf liðið sem fer út')
   }
+  const staying = outgoing === game.holderTeamId ? game.challengerTeamId : game.holderTeamId
+  return { holderTeamId: staying, challengerTeamId: game.waitingTeamId, waitingTeamId: outgoing }
 }

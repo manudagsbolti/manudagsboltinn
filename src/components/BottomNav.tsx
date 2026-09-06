@@ -7,8 +7,8 @@ export function BottomNav({ current, navigate }: { current: MainRoute; navigate:
     { route: 'stats', icon: '▥', label: 'Tölfræði' },
     { route: 'cloud', icon: '☁', label: 'Sync' },
   ]
-  return <nav className="bottom-nav">{items.map((item) => (
-    <button key={item.route} className={current === item.route ? 'active' : ''} onClick={() => navigate(item.route)}>
+  return <nav className="bottom-nav" aria-label="Aðalleiðsögn">{items.map((item) => (
+    <button key={item.route} className={current === item.route ? 'active' : ''} aria-current={current === item.route ? 'page' : undefined} onClick={() => navigate(item.route)}>
       <span>{item.icon}</span><small>{item.label}</small>
     </button>
   ))}</nav>

@@ -46,8 +46,12 @@ Raw facts eru geymd. Totals eru reiknuð:
 
 ## Offline og sync
 
-`AppState` er vistað í IndexedDB eftir hverja breytingu. Ef browser lokast meðan timer er RUNNING er session recoverað sem PAUSED.
+Virka appið (`src/main.tsx` → `src/App.tsx` → `src/components`) notar Dexie töflur í `src/db/localDb.ts`, ekki eldra `AppState` líkanið. Skipanir í `src/data/repository.ts` vista leik, atvik, Undo, næsta READY leik/sett og sync queue í einni IndexedDB transaction. Netvinnsla hefst eftir local commit.
 
-Supabase sync upsertar normalized gögn og `session_snapshots`. Snapshot er operational recovery/cache; analytical source er normalized tables.
+Ef browser lokast meðan timer er RUNNING er leikurinn endurheimtur sem PAUSED. Brot úr sekúndu eru varðveitt; aðeins klukkuskjárinn námundar. Við 00:00 eftir endurheimt þarf að staðfesta tíma handvirkt.
+
+Virka Supabase sync leiðin notar normalized töflur og röð af upsert/delete aðgerðum. Hún skrifar ekki `session_snapshots`; snapshot-leiðin er í eldra, óvirku appi. Sjá `docs/V1_AUDIT.md` fyrir þetta frávik og óloknar cloud/PWA prófanir.
+
+Annir eru valdar með vistuðu season ID. Dagsetningar og nöfn eru stillanleg; sjálfgefið janúar–apríl og september–desember. Breyting á dagsetningum flytur ekki eldri kvöld milli anna.
 
 V1 gerir ráð fyrir einum live recorder í einu. Multi-device collaborative live scoring er ekki hluti V1.

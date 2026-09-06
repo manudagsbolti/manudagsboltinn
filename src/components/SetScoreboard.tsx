@@ -7,8 +7,8 @@ export function SetScoreboard({ set, teams, games, winsPerPoint, pointsToWinSet 
     const team = teams.find(t => t.id === stat.teamId)!
     return <div className={`score-team ${stat.isWinner ? 'winner' : ''}`} key={team.id} style={{ '--team-color': team.color } as React.CSSProperties}>
       <div className="score-team-name"><span className="team-dot"/>{team.name}</div><strong>{stat.points}</strong>
-      <div className="progress-dots">{Array.from({ length: winsPerPoint }, (_, i) => <i key={i} className={i < stat.progressWins ? 'filled' : ''}/>)}</div>
-      <small>{stat.smallWins} litlir sigrar</small>
+      <div className="progress-dots">{Array.from({ length: pointsToWinSet }, (_, i) => <i key={i} className={i < stat.smallWins ? 'filled' : ''}/>)}</div>
+      <small>{stat.smallWins} sigrar</small>
     </div>
   })}</div>
 }

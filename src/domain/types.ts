@@ -5,6 +5,8 @@ export type SessionStatus = 'draft' | 'live' | 'completed'
 export type SetStatus = 'ready' | 'live' | 'completed'
 export type GameStatus = 'ready' | 'live' | 'paused' | 'completed'
 export type GameEndReason = 'goal' | 'timeout' | 'manual'
+export type PlayerRole = 'REGULAR' | 'SUBSTITUTE'
+export type GoalType = 'GOAL' | 'OWN_GOAL'
 
 export interface Player {
   id: UUID
@@ -21,6 +23,17 @@ export interface Season {
   startsOn: string
   endsOn?: string | null
   isActive: boolean
+}
+
+export interface PlayerRolePeriod {
+  id: UUID
+  seasonId: UUID
+  playerId: UUID
+  role: PlayerRole
+  validFrom: string
+  validTo?: string | null
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
 export interface Session {
@@ -40,6 +53,19 @@ export interface Session {
 export interface SessionPlayer {
   sessionId: UUID
   playerId: UUID
+  roleAtSession: PlayerRole
+  teamCode?: 'A' | 'B' | 'C' | null
+}
+
+export interface SessionBackfill {
+  sessionId: UUID
+  sourceKind: 'AGGREGATE'
+  assistsRecorded: false
+  teams: Array<{ code: 'A' | 'B' | 'C'; name: string; color: string; playerIds: UUID[] }>
+  rounds: Array<{ roundNo: number; teamGoals: Partial<Record<'A' | 'B' | 'C', number>> }>
+  playerGoals: Array<{ playerId: UUID; goals: number }>
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
 export interface SetRecord {
@@ -75,6 +101,8 @@ export interface Game {
   holderTeamId: UUID
   challengerTeamId: UUID
   waitingTeamId?: UUID | null
+  /** Null only when the first three-team matchup has no known incumbent. */
+  incumbentTeamId?: UUID | null
   status: GameStatus
   startedAt?: IsoDateTime | null
   endedAt?: IsoDateTime | null
@@ -94,6 +122,7 @@ export interface Goal {
   teamId: UUID
   scorerPlayerId: UUID
   assistPlayerId?: UUID | null
+  eventType: GoalType
   secondsElapsed: number
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
@@ -112,11 +141,13 @@ export interface TeamSetStats {
 
 export interface PlayerSessionStats {
   playerId: UUID
+  miniGames: number
   points: number
   smallWins: number
   setsPlayed: number
   goals: number
   assists: number
+  ownGoals: number
   setWins: number
   chokes: number
   zeroPointSets: number

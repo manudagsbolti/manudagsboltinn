@@ -3,15 +3,22 @@ import { supabase } from '../lib/supabase'
 
 const CONFLICT_KEYS: Record<SyncQueueItem['table'], string> = {
   players: 'id', seasons: 'id', sessions: 'id', session_players: 'session_id,player_id', sets: 'id',
-  set_teams: 'id', set_team_members: 'team_id,player_id', games: 'id', goals: 'id',
+  player_role_periods: 'id', session_backfills: 'session_id', set_teams: 'id', set_team_members: 'team_id,player_id', games: 'id', goals: 'id', timer_events: 'id',
 }
 
 export async function enqueueSync(item: Omit<SyncQueueItem, 'attempts'>): Promise<void> {
-  await db.syncQueue.put({ ...item, attempts: 0 })
-  void flushSyncQueue()
+  const last = await db.syncQueue.orderBy('createdAt').last()
+  const createdAt = new Date(Math.max(Date.parse(item.createdAt), last ? Date.parse(last.createdAt) + 1 : 0)).toISOString()
+  await db.syncQueue.put({ ...item, createdAt, attempts: 0 })
 }
 
-export async function flushSyncQueue(): Promise<{ synced: number; failed: number }> {
+let inFlight: Promise<{ synced: number; failed: number }> | null = null
+export function flushSyncQueue(): Promise<{ synced: number; failed: number }> {
+  if (!inFlight) inFlight = flush().finally(() => { inFlight = null })
+  return inFlight
+}
+
+async function flush(): Promise<{ synced: number; failed: number }> {
   if (!supabase || !navigator.onLine) return { synced: 0, failed: 0 }
   const { data: auth } = await supabase.auth.getSession()
   if (!auth.session) return { synced: 0, failed: 0 }
@@ -22,7 +29,9 @@ export async function flushSyncQueue(): Promise<{ synced: number; failed: number
 
   for (const item of items) {
     try {
-      const { error } = await supabase.from(item.table).upsert(toSnakeCase(item.payload), {
+      const { error } = item.operation === 'delete'
+        ? await supabase.from(item.table).delete().eq('id', item.entityId)
+        : await supabase.from(item.table).upsert(toSnakeCase(item.payload) as Record<string, unknown>, {
         onConflict: CONFLICT_KEYS[item.table],
       })
       if (error) throw error
@@ -34,6 +43,7 @@ export async function flushSyncQueue(): Promise<{ synced: number; failed: number
         attempts: item.attempts + 1,
         lastError: error instanceof Error ? error.message : String(error),
       })
+      break // Preserve dependency and undo ordering on retry.
     }
   }
   return { synced, failed }

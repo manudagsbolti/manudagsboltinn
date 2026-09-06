@@ -1,5 +1,7 @@
 # Architecture — Mánudagsboltinn V1.1
 
+Historical design notes. See [the current architecture](docs/ARCHITECTURE.md) and [V1 audit](docs/V1_AUDIT.md); the former 4×4 scoring model below is superseded by first-to-four mini-game wins.
+
 ## 1. Raw truth model
 
 Raw gögn eru sannleikurinn:

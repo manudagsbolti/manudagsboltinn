@@ -8,7 +8,7 @@ export interface RuleConfig {
 
 export const DEFAULT_RULES: RuleConfig = {
   gameDurationSeconds: 180,
-  winsPerPoint: 4,
+  winsPerPoint: 1,
   pointsToWinSet: 4,
 }
 
@@ -68,6 +68,6 @@ export function formatClock(totalSeconds: number): string {
 
 export function currentRemainingSeconds(game: Game, now = Date.now()): number {
   if (game.status !== 'live' || !game.timerStartedAt) return game.remainingSeconds
-  const elapsed = Math.floor((now - new Date(game.timerStartedAt).getTime()) / 1000)
+  const elapsed = Math.max(0, (now - new Date(game.timerStartedAt).getTime()) / 1000)
   return Math.max(0, game.remainingSeconds - elapsed)
 }

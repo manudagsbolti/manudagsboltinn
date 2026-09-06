@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase'
 import { flushSyncQueue } from './syncQueue'
 
 const TABLES = [
-  ['players', db.players], ['seasons', db.seasons], ['sessions', db.sessions], ['session_players', db.sessionPlayers],
-  ['sets', db.sets], ['set_teams', db.setTeams], ['set_team_members', db.setTeamMembers], ['games', db.games], ['goals', db.goals],
+  ['players', db.players], ['seasons', db.seasons], ['player_role_periods', db.rolePeriods], ['sessions', db.sessions], ['session_players', db.sessionPlayers],
+  ['session_backfills', db.sessionBackfills],
+  ['sets', db.sets], ['set_teams', db.setTeams], ['set_team_members', db.setTeamMembers], ['games', db.games], ['goals', db.goals], ['timer_events', db.timerEvents],
 ] as const
 
 export async function syncCloud(): Promise<{ pushed: number; pulled: number }> {

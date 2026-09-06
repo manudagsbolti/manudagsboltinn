@@ -1,6 +1,6 @@
-import type { Game, Goal, Player, Season, Session, SessionPlayer, SetRecord, SetTeam, SetTeamMember, UUID } from '../domain/types'
+import type { Game, Goal, Player, Season, Session, SessionBackfill, SessionPlayer, SetRecord, SetTeam, SetTeamMember, UUID } from '../domain/types'
 import { buildSetTeamStats } from '../domain/rules'
-import { calculateSessionPlayerStats } from './stats'
+import { calculateBackfillPlayerStats, calculateSessionPlayerStats } from './stats'
 
 export interface SeasonPlayerAnalytics {
   playerId: UUID
@@ -60,6 +60,7 @@ export type AnalyticsData = {
   memberships: SetTeamMember[]
   games: Game[]
   goals: Goal[]
+  backfills?: SessionBackfill[]
 }
 
 export function seasonStartYearForDate(dateIso: string): number {
@@ -84,13 +85,13 @@ export function seasonYearsFromSessions(sessions: Session[]): number[] {
   return [...years].sort((a,b) => b-a)
 }
 
-export function buildSeasonAnalytics(data: AnalyticsData, startYear: number): SeasonAnalytics {
-  const season = seasonWindow(startYear)
+export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Season, roleFilter: 'REGULAR' | 'SUBSTITUTE' | 'ALL' = 'REGULAR'): SeasonAnalytics {
+  const season = typeof selection === 'number' ? seasonWindow(selection) : selection
   const sessions = data.sessions
-    .filter(s => s.status === 'completed' && s.playedOn >= season.startsOn && s.playedOn <= (season.endsOn ?? '9999-12-31'))
+    .filter(s => s.status === 'completed' && (typeof selection === 'number' ? s.playedOn >= season.startsOn && s.playedOn <= (season.endsOn ?? '9999-12-31') : s.seasonId === season.id))
     .sort((a,b) => a.playedOn.localeCompare(b.playedOn))
   const sessionIds = new Set(sessions.map(s => s.id))
-  const seasonSets = data.sets.filter(s => sessionIds.has(s.sessionId) && s.status === 'completed')
+  const seasonSets = data.sets.filter(s => sessionIds.has(s.sessionId))
   const setIds = new Set(seasonSets.map(s => s.id))
   const seasonTeams = data.teams.filter(t => setIds.has(t.setId))
   const seasonMemberships = data.memberships.filter(m => setIds.has(m.setId))
@@ -114,7 +115,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, startYear: number): Se
   }
 
   for (const session of sessions) {
-    const ids = data.attendance.filter(a => a.sessionId === session.id).map(a => a.playerId)
+    const ids = data.attendance.filter(a => a.sessionId === session.id && (roleFilter === 'ALL' || a.roleAtSession === roleFilter)).map(a => a.playerId)
     const sets = seasonSets.filter(s => s.sessionId === session.id)
     const localSetIds = new Set(sets.map(s => s.id))
     const teams = seasonTeams.filter(t => localSetIds.has(t.setId))
@@ -122,10 +123,11 @@ export function buildSeasonAnalytics(data: AnalyticsData, startYear: number): Se
     const games = seasonGames.filter(g => localSetIds.has(g.setId))
     const localGameIds = new Set(games.map(g => g.id))
     const goals = seasonGoals.filter(g => localGameIds.has(g.gameId))
-    const stats = calculateSessionPlayerStats({
+    const backfill = data.backfills?.find(item => item.sessionId === session.id)
+    const stats = (backfill ? calculateBackfillPlayerStats(backfill) : calculateSessionPlayerStats({
       playerIds: ids, sets, teams, memberships, games, goals,
       winsPerPoint: session.winsPerPoint, pointsToWinSet: session.pointsToWinSet,
-    })
+    })).filter(stat => ids.includes(stat.playerId))
     for (const night of stats) {
       const row = ensure(night.playerId)
       row.sessions++
@@ -163,9 +165,9 @@ export function buildSeasonAnalytics(data: AnalyticsData, startYear: number): Se
     awards: buildAwards(rows),
     totals: {
       nights: sessions.length,
-      sets: seasonSets.length,
-      games: seasonGames.length,
-      goals: seasonGoals.length,
+      sets: seasonSets.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.length, 0),
+      games: seasonGames.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.reduce((roundSum, round) => roundSum + Object.values(round.teamGoals).reduce((goalSum, goals) => goalSum + (goals ?? 0), 0), 0), 0),
+      goals: seasonGoals.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.playerGoals.reduce((goalSum, row) => goalSum + row.goals, 0), 0),
       players: rows.length,
     },
   }
