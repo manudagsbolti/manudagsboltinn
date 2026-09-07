@@ -18,6 +18,13 @@ export interface UndoAction {
   createdAt: string
 }
 
+export interface LocalSubmission {
+  sessionId: UUID
+  token: string
+  state: 'queued' | 'pending' | 'approved' | 'rejected'
+  payload: unknown
+}
+
 export interface SyncQueueItem {
   id: UUID
   table: 'players' | 'seasons' | 'player_role_periods' | 'sessions' | 'session_players' | 'session_backfills' | 'sets' | 'set_teams' | 'set_team_members' | 'games' | 'goals' | 'timer_events'
@@ -44,6 +51,7 @@ export class ManudagsboltinnDb extends Dexie {
   timerEvents!: EntityTable<TimerEvent, 'id'>
   undoActions!: EntityTable<UndoAction, 'id'>
   syncQueue!: EntityTable<SyncQueueItem, 'id'>
+  submissions!: EntityTable<LocalSubmission, 'sessionId'>
 
   constructor(name = 'manudagsboltinn') {
     super(name)
@@ -94,6 +102,7 @@ export class ManudagsboltinnDb extends Dexie {
         if (ids.has(game.setId) && game.gameNo === 1 && game.status !== 'completed') game.incumbentTeamId = null
       })
     })
+    this.version(6).stores({ submissions: 'sessionId, state' })
   }
 }
 

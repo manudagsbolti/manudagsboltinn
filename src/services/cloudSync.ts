@@ -3,7 +3,8 @@ import { db } from '../db/localDb'
 import { supabase } from '../lib/supabase'
 import { flushSyncQueueUnlocked } from './syncQueue'
 import { withSyncLock } from './syncLock'
-import { parseCloudState, readLocalSyncState, sameRows, syncTables, type SyncState } from './syncData'
+import { usesSubmissions } from './access'
+import { fromSnakeCase, parseCloudState, readLocalSyncState, sameRows, syncTables, type SyncState } from './syncData'
 
 export function syncCloud(): Promise<{ pushed: number; pulled: number; deferredPull: boolean }> {
   return withSyncLock(async () => {
@@ -13,6 +14,19 @@ export function syncCloud(): Promise<{ pushed: number; pulled: number; deferredP
     if (error || !data.session) throw new Error('Skráðu þig inn áður en þú samstillir.')
     const pushed = await flushSyncQueueUnlocked()
     if (pushed.failed) throw new Error('Samstilling mistókst. Breytingar bíða áfram á tækinu.')
+    if (usesSubmissions()) {
+      const response = await supabase.rpc('get_submission_roster')
+      if (response.error || !Array.isArray(response.data)) throw new Error('Ekki tókst að sækja leikmannalista.')
+      // Merge only missing roster entries. Never replace local nights or players
+      // while an offline recording is in progress.
+      await db.transaction('rw', db.players, async () => {
+        for (const raw of response.data) {
+          const player = fromSnakeCase(raw) as import('../domain/types').Player
+          if (!await db.players.get(player.id)) await db.players.add(player)
+        }
+      })
+      return { pushed: pushed.synced, pulled: response.data.length, deferredPull: false }
+    }
     const baseline = await db.transaction('r', db.tables, readLocalSyncState)
     // One database statement gives a consistent view, including cloud deletes.
     const response = await supabase.rpc('get_sync_state')

@@ -2,6 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
 import { calculateBackfillPlayerStats, calculateSessionPlayerStats } from '../services/stats'
 import { exportBackup } from '../services/backup'
+import { SeasonContext } from './SeasonContext'
+import { todayIso } from '../utils/id'
 
 export function HomeScreen({ onNew, onManual, onContinue, onSetup, onSummary }: { onNew: () => void; onManual: () => void; onContinue: (id: string) => void; onSetup: (id: string) => void; onSummary: (id: string) => void }) {
   const data = useLiveQuery(async () => {
@@ -45,6 +47,7 @@ export function HomeScreen({ onNew, onManual, onContinue, onSetup, onSummary }: 
     : <button className="new-session-hero" onClick={onNew}><span className="plus-orb">+</span><div><strong>Byrja nýjan leikdag</strong><small>Mæting · lið · sett · tölfræði</small></div><b>→</b></button>}
     <button className="historical-entry-link" onClick={onManual}><span>✎</span><div><strong>Handskrá kvöld</strong><small>Þegar live-skráning var ekki notuð eða gögn vantar</small></div><b>→</b></button>
 
+    <SeasonContext date={todayIso()} current />
     <div className="home-metrics">
       <div><strong>{completedSets}</strong><span>sett skráð</span></div><div><strong>{totalGoals}</strong><span>mörk</span></div><div><strong>{topScorer?.goals ?? 0}</strong><span>{topScorer ? `${data.players.find(p => p.id === topScorer.playerId)?.name} · mörk` : 'toppskor'}</span></div>
     </div>

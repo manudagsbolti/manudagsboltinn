@@ -54,6 +54,7 @@ export interface SessionPlayer {
   sessionId: UUID
   playerId: UUID
   roleAtSession: PlayerRole
+  roleCorrections?: Array<{ fromRole: PlayerRole; toRole: PlayerRole; correctedAt: string; reason: string }> | null
   teamCode?: 'A' | 'B' | 'C' | null
 }
 

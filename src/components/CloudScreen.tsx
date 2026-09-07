@@ -5,7 +5,7 @@ import { db } from '../db/localDb'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
 import { syncCloud } from '../services/cloudSync'
 import { exportBackup, restoreBackup } from '../services/backup'
-import { RecordingAccess } from './RecordingAccess'
+
 
 export function CloudScreen({ signOut }: { signOut: () => void }) {
   const queued = useLiveQuery(() => db.syncQueue.count(), []) ?? 0
@@ -59,7 +59,7 @@ export function CloudScreen({ signOut }: { signOut: () => void }) {
     {!hasSupabaseConfig ? <div className="setup-box card"><h3>Supabase ekki tengt enn</h3><p>Bættu <code>VITE_SUPABASE_URL</code> og <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> í <code>.env.local</code>. Appið heldur áfram að virka locally án þess.</p></div>
     : !auth ? <div className="auth-card card"><h3>Tengjast Mánudagsboltanum</h3><p>Notaðu stjórnandaaðganginn sem var stofnaður fyrir þig.</p><div className="field"><label>Netfang</label><input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} /></div><div className="field"><label>Lykilorð</label><input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} /></div><button className="primary" disabled={working||!email||!password} onClick={()=>void signIn()}>Skrá inn</button></div>
     : <div className="sync-card card"><div><small>Tengdur sem</small><strong>{auth.user.email}</strong></div><div className="queue-count"><b>{queued}</b><span>breytingar í bið</span></div><button className="primary jumbo" disabled={working} onClick={()=>void sync()}>{working?'Samstilli…':'↻ Sync núna'}</button><button className="text-button" onClick={signOut}>Skrá út</button></div>}
-    {auth && <RecordingAccess />}
+
     <div className="backup-card card"><div><span className="eyebrow">ÖRYGGISAFRIT</span><h3>Dumpa öllum gögnum</h3><p>Gerðu þetta fyrir update eða fyrir leikdag ef þú vilt vera alveg öruggur. Backup inniheldur allt raw leikjagagnasafnið.</p></div><div className="backup-actions"><button className="primary" onClick={()=>void exportBackup()}>↓ Export backup</button><label className="restore-button">↑ Restore backup<input type="file" accept="application/json,.json" disabled={working} onChange={e=>void restore(e.target.files?.[0])}/></label></div></div>
     {message && <div className="sync-message">{message}</div>}
     {syncError && <div className="sync-message" role="status">Samstilling mistókst. Gögn eru örugg á tækinu og bíða næstu tilraunar.</div>}

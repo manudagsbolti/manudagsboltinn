@@ -20,18 +20,24 @@ export async function playBuzzer() {
   const ctx = getContext()
   if (ctx.state === 'suspended') await ctx.resume()
   const start = ctx.currentTime
-  for (let i = 0; i < 3; i++) {
+  // Two short whistle blasts followed by a longer final blast. Sine tones
+  // avoid the harsh square-wave buzzer; close frequencies add whistle flutter.
+  for (const [offset, duration] of [[0, 0.18], [0.30, 0.18], [0.62, 0.65]]) {
+    for (const frequency of [2800, 2920]) {
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
-    osc.type = 'square'
-    osc.frequency.value = i === 2 ? 520 : 430
-    gain.gain.setValueAtTime(0.0001, start + i * 0.3)
-    gain.gain.exponentialRampToValueAtTime(0.75, start + i * 0.3 + 0.02)
-    gain.gain.setValueAtTime(0.75, start + i * 0.3 + 0.18)
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.3 + 0.26)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(frequency - 120, start + offset)
+    osc.frequency.linearRampToValueAtTime(frequency, start + offset + 0.035)
+    gain.gain.setValueAtTime(0.0001, start + offset)
+    gain.gain.exponentialRampToValueAtTime(0.22, start + offset + 0.015)
+    gain.gain.setValueAtTime(0.22, start + offset + duration - 0.04)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + duration)
     osc.connect(gain).connect(ctx.destination)
-    osc.start(start + i * 0.3)
-    osc.stop(start + i * 0.3 + 0.28)
+    osc.onended = () => { osc.disconnect(); gain.disconnect() }
+    osc.start(start + offset)
+    osc.stop(start + offset + duration + 0.01)
+    }
   }
   if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 400])
 }

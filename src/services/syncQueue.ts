@@ -2,8 +2,11 @@ import { db, type SyncQueueItem } from '../db/localDb'
 import { supabase } from '../lib/supabase'
 import { withSyncLock } from './syncLock'
 import { toSnakeCase } from './syncData'
+import { usesSubmissions } from './access'
+import { flushSubmissions } from './submissions'
 
 export async function enqueueSync(item: Omit<SyncQueueItem, 'attempts'>): Promise<void> {
+  if (usesSubmissions()) return
   const last = await db.syncQueue.orderBy('createdAt').last()
   const createdAt = new Date(Math.max(Date.parse(item.createdAt), last ? Date.parse(last.createdAt) + 1 : 0)).toISOString()
   await db.syncQueue.put({ ...item, createdAt, attempts: 0 })
@@ -22,6 +25,7 @@ export async function flushSyncQueueUnlocked(): Promise<{ synced: number; failed
   if (!supabase || !navigator.onLine) return { synced: 0, failed: 0 }
   const { data: auth, error: authError } = await supabase.auth.getSession()
   if (authError || !auth.session) return { synced: 0, failed: 0 }
+  if (usesSubmissions()) return flushSubmissions()
   const items = await db.syncQueue.orderBy('createdAt').toArray()
   if (!items.length) return { synced: 0, failed: 0 }
   try {

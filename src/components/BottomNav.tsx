@@ -1,9 +1,10 @@
-export type MainRoute = 'home' | 'players' | 'stats' | 'cloud'
+export type MainRoute = 'home' | 'players' | 'seasons' | 'stats' | 'cloud'
 
 export function BottomNav({ current, navigate }: { current: MainRoute; navigate: (route: MainRoute) => void }) {
   const items: { route: MainRoute; icon: string; label: string }[] = [
     { route: 'home', icon: '⌂', label: 'Heim' },
     { route: 'players', icon: '♟', label: 'Leikmenn' },
+    { route: 'seasons', icon: '▦', label: 'Annir og kvöld' },
     { route: 'stats', icon: '▥', label: 'Tölfræði' },
     { route: 'cloud', icon: '☁', label: 'Sync' },
   ]

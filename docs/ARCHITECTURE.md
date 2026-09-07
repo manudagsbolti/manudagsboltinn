@@ -58,27 +58,22 @@ Skýjavinna er raðbundin með Web Locks milli flipa þar sem það er stutt og 
 
 `app_admins` er lokaður stjórnendalisti tengdur Auth UID. Allar raw töflur, kvittanir og snapshots nota RLS. RPC eru security-invoker, með föstu search_path og engum anonymous framkvæmdarrétti. Eldri SQL analytics views eru ekki aðgengileg frontend; virka appið reiknar tölfræði local með role-at-session og own-goal reglum.
 
-Migration 008 bætir við `app_recorders` og einum `recording_window` sem stjórnandi
-opnar fyrir dagsetningu/önn. Sameiginlega innskráningin notar fast Auth auðkenni
-`skraning@manudagsboltinn.com`; aðeins lykilorð er slegið inn á skráningarskjánum.
-Stjórnandi notar eigið netfang og `app_admins` heimild. Enginn service-role lykill
-eða sérstakur lykilorðabakendi er í frontend.
-
-Recorder RLS gefur aðeins aðgang að opna kvöldinu og virkum leikmannalista.
-`get_recorder_context` afhendir aðeins gildandi hlutverk og lágmarks annarauðkenni
-með skráningardeginum, ekki raunveruleg annargögn eða söguleg hlutverk.
-Þröng security-definer föll með föstu search_path meta aðgang yfir tengdar töflur
-án RLS-endurkvæmni og skrifa snapshots án þess að afhenda þau skráningaraðila.
-`apply_sync_batch` helst security-invoker og getur ekki farið fram hjá RLS.
-Trigger varðveitir hlutverkasnapshot og tekur ný hlutverk frá tímabilum stjórnanda.
-
-`AccessGate` stendur fyrir framan allar production leiðir. Appið felur líka
-annir/ratings í liðaskiptingu. Local scope geymir UID, app-hlutverk og opna kvöldið;
-við scope-skipti eru áður sótt gögn hreinsuð aðeins ef outbox er tómur. Við
-útskráningu er local gagnasafn hreinsað svo eldri admin gögn fylgi ekki öðrum
-aðgangi á sama tæki. Cache veitir eingöngu offline aðgang að þegar sóttum gögnum;
-allar skýjaaðgerðir þurfa virka Supabase Auth lotu og backend heimildir.
+Migration 011 replaces the recording-window workflow from 008 with submission
+review. See [Submission architecture and setup](SUBMISSION_REVIEW.md).
+Recorders retain local facts in IndexedDB and queue frozen raw submissions in
+Dexie v6. Only an admin-approved submission is imported into normalized tables,
+atomically with its approval receipt. The shared Auth user cannot read any
+submitted nights or mutate normalized tables. Admin sync remains unchanged.
 
 Annir eru valdar með vistuðu season ID. Dagsetningar og nöfn eru stillanleg; sjálfgefið janúar–apríl og september–desember. Breyting á dagsetningum flytur ekki eldri kvöld milli anna.
+
+Stjórnandi getur sérstaklega leiðrétt ranga `roleAtSession` skráningu fyrir eitt
+kvöld. Ný staða, fyrri staða, ástæða og tími eru vistuð í `roleCorrections` á
+session-player færslunni í sömu local transaction og outbox. Migration 009 bætir
+við nullable JSONB dálki; eldri local færslur án sögunnar haldast gildar og enginn
+nýr Dexie index er nauðsynlegur. Sagan fylgir núverandi attendance sync, snapshot
+og backup flæði. Recorder-trigger varðveitir bæði stöðu og sögu við update og
+hafnar innspýtingu sögu við insert með því að setja hana null. Þetta er saga
+leiðréttinga appsins, ekki óbreytanleg öryggisúttekt á aðgerðum gagnagrunnsstjóra.
 
 V1 gerir ráð fyrir einum live recorder í einu. Multi-device collaborative live scoring er ekki hluti V1.

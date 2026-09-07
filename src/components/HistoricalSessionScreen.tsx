@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { createHistoricalSession } from '../data/repository'
+import { createHistoricalSession, roleOnDate } from '../data/repository'
 import { db } from '../db/localDb'
 import type { SessionBackfill } from '../domain/types'
 import { todayIso } from '../utils/id'
+import { SeasonContext, displayDate } from './SeasonContext'
 
 const TEAMS = [
   { code: 'A' as const, name: 'Rautt', color: '#ef4444' },
@@ -14,6 +15,10 @@ const TEAMS = [
 export function HistoricalSessionScreen({ onSaved, onCancel }: { onSaved: (sessionId: string) => void; onCancel: () => void }) {
   const players = useLiveQuery(() => db.players.toArray().then(rows => rows.filter(player => player.isActive).sort((a,b) => a.name.localeCompare(b.name, 'is'))), []) ?? []
   const [date, setDate] = useState(todayIso())
+  const seasons = useLiveQuery(() => db.seasons.toArray(), []) ?? []
+  const periods = useLiveQuery(() => db.rolePeriods.toArray(), []) ?? []
+  const season = seasons.filter(s => s.startsOn <= date && (!s.endsOn || s.endsOn >= date)).sort((a,b) => Number(b.isActive) - Number(a.isActive))[0]
+  const role = (playerId: string) => season ? roleOnDate(periods, season.id, playerId, date) : 'SUBSTITUTE'
   const [teamCount, setTeamCount] = useState<2 | 3>(3)
   const [assignments, setAssignments] = useState<Record<string, 'A' | 'B' | 'C' | undefined>>({})
   const [rounds, setRounds] = useState<Array<Record<'A' | 'B' | 'C', number>>>([{ A: 0, B: 0, C: 0 }])
@@ -54,12 +59,13 @@ export function HistoricalSessionScreen({ onSaved, onCancel }: { onSaved: (sessi
     <div className="section-heading"><div><span className="eyebrow">HANDSKRÁNING</span><h1>Handskrá kvöld</h1></div><span className="count-badge">Samantektargögn</span></div>
     <p className="historical-intro">Notaðu þetta þegar kvöld var ekki skráð í Live Mode. Skráðu aðeins það sem þið vitið; kerfið býr ekki til tilbúna leikjaröð eða stoðsendingar.</p>
 
-    <div className="date-row card"><label>Dagsetning</label><input type="date" value={date} onChange={event => setDate(event.target.value)} /></div>
+    <div className="date-row card"><label htmlFor="historical-date">Dagsetning kvöldsins</label><input id="historical-date" type="date" value={date} onChange={event => setDate(event.target.value)} /></div>
+    <SeasonContext date={date} />
     <div className="segmented team-count"><button className={teamCount === 2 ? 'active' : ''} onClick={() => setTeamCountSafe(2)}>2 lið</button><button className={teamCount === 3 ? 'active' : ''} onClick={() => setTeamCountSafe(3)}>3 lið</button></div>
 
     <div className="subheading"><span>LIÐASKIPAN</span><strong>Hverjir voru saman?</strong></div>
     <div className="historical-roster card">
-      {players.map(player => <div className="historical-player" key={player.id}><strong>{player.name}</strong><div>{activeTeams.map(team => <button key={team.code} className={assignments[player.id] === team.code ? 'selected' : ''} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setAssignments(current => ({ ...current, [player.id]: current[player.id] === team.code ? undefined : team.code }))}>{team.code}</button>)}</div></div>)}
+      {players.map(player => <div className="historical-player" key={player.id}><div><strong>{player.name}</strong><small className={`role-badge ${role(player.id) === 'REGULAR' ? 'regular' : 'substitute'}`}>{role(player.id) === 'REGULAR' ? 'F · Fastamaður' : 'V · Varamaður'}</small></div><div>{activeTeams.map(team => <button key={team.code} className={assignments[player.id] === team.code ? 'selected' : ''} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => setAssignments(current => ({ ...current, [player.id]: current[player.id] === team.code ? undefined : team.code }))}>{team.code}</button>)}</div></div>)}
       {!players.length && <div className="empty-state compact">Bættu leikmönnum fyrst við undir Leikmenn.</div>}
     </div>
 
@@ -74,6 +80,6 @@ export function HistoricalSessionScreen({ onSaved, onCancel }: { onSaved: (sessi
 
     <div className={`historical-balance ${teamGoalTotal === playerGoalTotal ? 'ok' : ''}`}><span>Liðsmörk <b>{teamGoalTotal}</b></span><span>Leikmannamörk <b>{playerGoalTotal}</b></span><strong>{teamGoalTotal === playerGoalTotal ? '✓ Stemmir' : `${Math.abs(teamGoalTotal - playerGoalTotal)} marka munur`}</strong></div>
     {emptyTeams.length > 0 && <div className="warning-banner">Öll liðin þurfa leikmenn.</div>}
-    <div className="sticky-action"><button className="primary jumbo" disabled={!valid || saving} onClick={() => void save()}>{saving ? 'Vista…' : 'Vista handskráð kvöld'} <span>→</span></button><small>Stoðsendingar verða merktar óskráðar, ekki sem engar stoðsendingar.</small></div>
+    <div className="sticky-action"><strong>Kvöldið verður skráð {displayDate(date)}</strong><button className="primary jumbo" disabled={!valid || saving} onClick={() => void save()}>{saving ? 'Vista…' : 'Vista handskráð kvöld'} <span>→</span></button><small>Stoðsendingar verða merktar óskráðar, ekki sem engar stoðsendingar.</small></div>
   </section>
 }

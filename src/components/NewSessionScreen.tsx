@@ -5,8 +5,9 @@ import { addPlayer, createSession, roleOnDate } from '../data/repository'
 import { DEFAULT_RULES } from '../domain/rules'
 import { todayIso } from '../utils/id'
 import { defaultSeasonForDate } from '../domain/seasons'
+import { SeasonContext } from './SeasonContext'
 
-export function NewSessionScreen({ onCreated, onCancel, recordingDate, recordingSeasonId }: { onCreated: (id: string) => void; onCancel: () => void; recordingDate?: string; recordingSeasonId?: string }) {
+export function NewSessionScreen({ onCreated, onCancel, recordingDate, recordingSeasonId, recorder = false }: { onCreated: (id: string) => void; onCancel: () => void; recordingDate?: string; recordingSeasonId?: string; recorder?: boolean }) {
   const players = useLiveQuery(() => db.players.toArray().then(rows => rows.filter(p => p.isActive)), []) ?? []
   const rolePeriods = useLiveQuery(() => db.rolePeriods.toArray(), []) ?? []
   const seasons = useLiveQuery(() => db.seasons.toArray(), []) ?? []
@@ -43,15 +44,16 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
   return <section className="screen page-screen wizard-screen">
     <button className="back-button" onClick={onCancel}>← Til baka</button>
     <div className="section-heading"><div><span className="eyebrow">NÝR LEIKDAGUR</span><h1>Hverjir mæta?</h1></div><span className="count-badge accent">{selectedCount} valdir</span></div>
-    {recordingDate ? <p>Dagsetning: {recordingDate}</p> : <>
+    {recorder ? <><label className="field">Dagsetning kvöldsins<input required type="date" value={date} onChange={e => setDate(e.target.value)} /></label><p>Stjórnandi velur önn og staðfestir fastamanns-/varamannsstöður við yfirferð.</p></> : recordingDate ? <p>Dagsetning: {recordingDate}</p> : <>
       <div className="date-row card"><div><label>Dagsetning</label><small className="season-inline">Tímabil {persistedSeason?.name ?? season?.name ?? 'Sumarfrí'}</small></div><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
       <label className="field">Önn<select value={seasonId} onChange={e => setSeasonId(e.target.value)}><option value="">Sjálfvirkt eftir dagsetningu</option>{seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     </>}
+    {!recorder && !recordingDate && <SeasonContext date={date} seasonId={seasonId} />}
     {error && <p role="alert" className="warning-banner">{error}</p>}
     <div className="select-tools"><button onClick={() => setSelected(allSelected ? new Set() : new Set(players.map(p => p.id)))}>{allSelected ? 'Afvelja alla' : 'Velja alla'}</button></div>
     <div className="attendance-grid">
       {sorted.map(player => <button key={player.id} className={`attendance-player ${selected.has(player.id) ? 'selected' : ''}`} onClick={() => toggle(player.id)}>
-        <span className="checkmark">{selected.has(player.id) ? '✓' : ''}</span><strong>{player.name}</strong>{role(player.id) === 'SUBSTITUTE' && <small className="role-badge">V</small>}{player.nickname && <small>{player.nickname}</small>}
+        <span className="checkmark">{selected.has(player.id) ? '✓' : ''}</span><strong>{player.name}</strong>{!recorder && <small className={`role-badge ${role(player.id) === 'REGULAR' ? 'regular' : 'substitute'}`}>{role(player.id) === 'REGULAR' ? 'F · Fastamaður' : 'V · Varamaður'}</small>}{player.nickname && <small>{player.nickname}</small>}
       </button>)}
     </div>
     <div className="quick-add card"><input value={quickName} onChange={e => setQuickName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void quickAdd() } }} placeholder="Nýr leikmaður sem mætti í kvöld..."/><button onClick={() => void quickAdd()}>+ Bæta við</button></div>

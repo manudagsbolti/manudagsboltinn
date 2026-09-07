@@ -1,9 +1,10 @@
+import { NightTeams } from './NightTeams'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
 import { completeSession, createNextGame, createSet, pauseGame, recordGoal, recoverRunningGames, resumeGame, startGame, timeoutGame, undoLastScoringAction, type TeamDraft } from '../data/repository'
 import { buildSetTeamStats, currentRemainingSeconds, formatClock } from '../domain/rules'
-import { calculateSessionPlayerStats } from '../services/stats'
+import { NightSets } from './NightSets'
 import { buildSessionSummary } from '../services/sessionSummary'
 import { playBuzzer, unlockAudio } from '../lib/sound'
 import { GoalModal } from './GoalModal'
@@ -79,11 +80,8 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
   const defendingTeamId = goalTeamId === currentGame.holderTeamId ? currentGame.challengerTeamId : currentGame.holderTeamId
   const defendingPlayers = goalTeam ? data.memberships.filter(m => m.teamId === defendingTeamId).map(m => players.find(p => p.id === m.playerId)).filter(Boolean) as typeof players : []
   const setStats = buildSetTeamStats(currentSet, setTeams, setGames, session)
-  const nightTeams = buildSessionSummary(data).teams
-  const allStats = calculateSessionPlayerStats({
-    playerIds: players.map(p => p.id), sets: data.sets, teams: data.teams, memberships: data.memberships, games: data.games, goals: data.goals,
-    winsPerPoint: session.winsPerPoint, pointsToWinSet: session.pointsToWinSet,
-  }).sort((a,b) => b.points - a.points || b.goals - a.goals)
+  const summary = buildSessionSummary(data)
+  const nightTeams = summary.teams
 
   const saveGoal = async (scorerId: string, assistId: string | null, eventType: 'GOAL' | 'OWN_GOAL') => {
     if (!goalTeam) return
@@ -177,8 +175,9 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
       <button disabled={busy || !undoAvailable} onClick={() => void run(() => undoLastScoringAction(sessionId))}>↶ Afturkalla síðasta leik</button>
       <button disabled={busy} onClick={() => void run(finish)}>Klára kvöldið</button>
     </div>
-    <section className="live-session-stats"><h2>Lið kvöldsins</h2>{nightTeams.map(team => <p key={team.key}>{team.name}: {team.wins} sigrar · {team.sets} sett</p>)}</section>
-    <section className="live-session-stats"><div className="subheading"><span>KVÖLDIÐ</span><strong>Staða leikmanna</strong></div><div className="compact-table"><div className="table-head"><span>Leikmaður</span><span>Sigrar</span><span>⚽</span><span>🅰</span></div>{allStats.slice(0, 8).map(stat => <div className="table-row" key={stat.playerId}><span>{players.find(p => p.id === stat.playerId)?.name}</span><strong>{stat.points}</strong><span>{stat.goals}</span><span>{stat.assists}</span></div>)}</div></section>
+    <section className="live-session-stats"><h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
+    <NightSets data={data}/>
+    <h2>Staða allra leikmanna</h2><div className="summary-table-wrap"><table className="summary-table"><thead><tr><th>Leikmaður</th><th>Sett</th><th>Sigrar</th><th>Jafntefli</th><th>Mörk</th><th>Stoðs.</th></tr></thead><tbody>{summary.players.map(p => <tr key={p.playerId}><th scope="row">{p.name}</th><td>{p.setWins}</td><td>{p.smallWins}</td><td>{p.draws}</td><td>{p.goals}</td><td>{p.assists}</td></tr>)}</tbody></table></div></section>
     {goalTeam && <GoalModal
       team={goalTeam} players={membersForGoalTeam} defendingPlayers={defendingPlayers}
       onClose={() => setGoalTeamId(null)} onSave={saveGoal}

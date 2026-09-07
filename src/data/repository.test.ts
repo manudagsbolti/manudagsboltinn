@@ -4,10 +4,57 @@ import { DEFAULT_RULES, currentRemainingSeconds, getSetWinner } from '../domain/
 import { calculateSessionPlayerStats } from '../services/stats'
 import { buildSeasonAnalytics } from '../services/seasonAnalytics'
 import { buildSessionSummary, type SummaryData } from '../services/sessionSummary'
-import { completeSession, saveSeason } from './repository'
+import { completeSession, saveSeason, correctSessionDate, createHistoricalSession, correctSessionPlayerRole } from './repository'
 import { createSession, createSet, startGame, pauseGame, resumeGame, recordGoal, timeoutGame, createNextGame, recoverRunningGames, undoLastScoringAction, setPlayerRole } from './repository'
 
 const epoch = Date.parse('2026-09-07T20:00:00Z')
+describe('session date corrections', () => {
+  it('corrects only one attendance snapshot and keeps a reversible history without changing events or general roles', async () => {
+    const { session } = await setup([4,4])
+    await score(session.id)
+    await expect(correctSessionPlayerRole(session.id, '0-0', 'REGULAR', 'Röng uppsetning')).rejects.toThrow('Ljúktu')
+    await completeSession(session.id)
+    const goals = await db.goals.toArray()
+    const periods = await db.rolePeriods.toArray()
+    const other = await createSession({ playedOn: '2026-09-14', playerIds: ['0-0'], ...DEFAULT_RULES })
+    await expect(correctSessionPlayerRole(session.id, '0-0', 'REGULAR', ' ')).rejects.toThrow()
+    await correctSessionPlayerRole(session.id, '0-0', 'REGULAR', 'Röng uppsetning')
+    expect(await db.sessionPlayers.get([session.id, '0-0'])).toMatchObject({ roleAtSession: 'REGULAR', roleCorrections: [{ fromRole: 'SUBSTITUTE', toRole: 'REGULAR', reason: 'Röng uppsetning' }] })
+    expect((await db.sessionPlayers.get([other.id, '0-0']))?.roleAtSession).toBe('SUBSTITUTE')
+    expect(await db.rolePeriods.toArray()).toEqual(periods)
+    expect(await db.goals.toArray()).toEqual(goals)
+    await correctSessionPlayerRole(session.id, '0-0', 'SUBSTITUTE', 'Leiðrétt aftur')
+    expect((await db.sessionPlayers.get([session.id, '0-0']))?.roleCorrections).toHaveLength(2)
+    await correctSessionPlayerRole(session.id, '0-0', 'SUBSTITUTE', 'Engin breyting')
+    expect((await db.sessionPlayers.get([session.id, '0-0']))?.roleCorrections).toHaveLength(2)
+  })
+  it('moves a manual night to August 31 without changing facts or role snapshots and queues the update', async () => {
+    const season = await saveSeason({ name: 'Haust', startsOn: '2026-08-31', endsOn: '2026-12-31' })
+    await setPlayerRole(season.id, 'a', 'REGULAR', '2026-09-07')
+    const session = await createHistoricalSession({ playedOn: '2026-09-07', teams: [{ code: 'A', name: 'A', color: 'red', playerIds: ['a'] }, { code: 'B', name: 'B', color: 'blue', playerIds: ['b'] }], rounds: [{ roundNo: 1, teamGoals: { A: 4, B: 2 } }], playerGoals: [{ playerId: 'a', goals: 4 }, { playerId: 'b', goals: 2 }] })
+    const facts = await db.sessionBackfills.toArray()
+    const attendance = await db.sessionPlayers.toArray()
+    await db.syncQueue.clear()
+    await correctSessionDate(session.id, '2026-08-31', season.id)
+    expect(await db.sessions.get(session.id)).toMatchObject({ playedOn: '2026-08-31', seasonId: season.id })
+    expect(await db.sessionBackfills.toArray()).toEqual(facts)
+    expect(await db.sessionPlayers.toArray()).toEqual(attendance)
+    expect(await db.syncQueue.toArray()).toMatchObject([{ table: 'sessions', entityId: session.id, payload: { playedOn: '2026-08-31' } }])
+    const other = await saveSeason({ name: 'Önn 2', startsOn: '2027-01-01', endsOn: '2027-04-30' })
+    await correctSessionDate(session.id, '2027-01-04', other.id)
+    expect((await db.sessions.get(session.id))?.seasonId).toBe(other.id)
+    expect(await db.sessionPlayers.toArray()).toEqual(attendance)
+  })
+  it('rejects invalid/out-of-season dates and live nights without changing data', async () => {
+    const { session } = await setup()
+    await expect(correctSessionDate(session.id, '2026-09-01', session.seasonId!)).rejects.toThrow('Ljúktu')
+    await completeSession(session.id)
+    const before = await db.sessions.get(session.id)
+    await expect(correctSessionDate(session.id, '2026-02-30', session.seasonId!)).rejects.toThrow()
+    await expect(correctSessionDate(session.id, '2025-01-01', session.seasonId!)).rejects.toThrow('innan')
+    expect(await db.sessions.get(session.id)).toEqual(before)
+  })
+})
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(epoch)
@@ -20,6 +67,29 @@ async function summaryData(sessionId: string): Promise<SummaryData> {
 }
 
 describe('night completion and derived summary', () => {
+  it.each([[4,4], [4,4,5]])('counts timeout draws only on court, and reverses them on Undo (%j)', async (...sizes) => {
+    const { session, game, teams } = await setup(sizes)
+    await startGame(game.id)
+    vi.setSystemTime(epoch + 180_000)
+    await timeoutGame(game.id, sizes.length === 3 ? teams[0].id : undefined)
+    let summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary.draws).toBe(1)
+    expect(summary.teams.map(t => t.draws)).toEqual(sizes.length === 3 ? [1,1,0] : [1,1])
+    expect(summary.players.filter(p => p.draws === 1)).toHaveLength(8)
+    expect(summary.teams.every(t => t.wins === 0)).toBe(true)
+    await undoLastScoringAction(session.id)
+    summary = buildSessionSummary(await summaryData(session.id))
+    expect(summary.draws).toBe(0)
+    expect(summary.players.every(p => p.draws === 0)).toBe(true)
+  })
+  it('keeps unknown backfill draws distinct from zero and includes recorded scorer totals', async () => {
+    const session = await createHistoricalSession({ playedOn: '2026-09-07', teams: [{ code: 'A', name: 'A', color: 'red', playerIds: ['a'] }, { code: 'B', name: 'B', color: 'blue', playerIds: ['b'] }], rounds: [{ roundNo: 1, teamGoals: { A: 4, B: 2 } }], playerGoals: [{ playerId: 'a', goals: 4 }, { playerId: 'b', goals: 2 }] })
+    const summary = buildSessionSummary({ ...await summaryData(session.id), backfill: await db.sessionBackfills.get(session.id) })
+    expect(summary.draws).toBeNull()
+    expect(summary.teams.every(t => t.draws === null)).toBe(true)
+    expect(summary.players.every(p => p.draws === null)).toBe(true)
+    expect(summary.teams[0].scorers[0]).toMatchObject({ playerId: 'a', goals: 4 })
+  })
   it('finishes mid-set offline, freezes the timer, retains facts, and is idempotent', async () => {
     const { session, set } = await setup([4,4])
     await score(session.id)
@@ -58,6 +128,7 @@ describe('night completion and derived summary', () => {
     expect(summary.players.find(p => p.playerId === '1-0')).toMatchObject({ goals:0, ownGoals:1, contributions:0, miniGames:1 })
     expect(summary.players.find(p => p.playerId === '2-0')?.miniGames).toBe(0)
     expect(summary.teams.find(t => t.name === 'A')).toMatchObject({ wins:1, goals:1, games:1 })
+    expect(summary.teams.every(t => t.scorers.every(p => p.goals === 0))).toBe(true)
     await undoLastScoringAction(session.id)
     summary = buildSessionSummary(await summaryData(session.id))
     expect(summary.goals).toBe(0)
@@ -72,6 +143,7 @@ describe('night completion and derived summary', () => {
     expect(summary.playedSets).toHaveLength(2)
     expect(summary.teams).toHaveLength(2)
     expect(summary.teams.find(t => t.name === 'A')).toMatchObject({wins:8,sets:2,goals:8,games:8})
+    expect(summary.teams.find(t => t.name === 'A')!.scorers.find(p => p.playerId === '0-0')?.goals).toBe(8)
     expect(summary.players.find(p => p.playerId === '0-1')).toMatchObject({assists:8,contributions:8,setWins:2,miniGames:8,smallWins:8})
   })
   it('rolls back the entire scoring command if the outbox cannot be persisted', async () => {

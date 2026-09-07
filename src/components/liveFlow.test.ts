@@ -55,9 +55,9 @@ it('pauses before scorer selection, saves assist, shows READY, then finishes int
   await click('Klára kvöldið')
   await waitFor(() => expect(onFinish).toHaveBeenCalledOnce())
   await act(async () => root.render(createElement(SessionSummaryScreen,{sessionId:session.id,onBack:vi.fn()})))
-  await waitFor(() => expect(host.querySelectorAll('tbody tr')).toHaveLength(4))
-  const headings = [...host.querySelectorAll('thead th')].map(t=>t.textContent)
-  expect(headings).toEqual(['Leikmaður','Lið','Staða','Leikir','Sigrar','Sett','Mörk','Stoðs.','G+A','Sjálfsm.'])
+  await waitFor(() => expect(host.querySelectorAll('.summary-table tbody tr')).toHaveLength(4))
+  const headings = [...host.querySelectorAll('.summary-table thead th')].map(t=>t.textContent)
+  expect(headings).toEqual(['Leikmaður','Lið','Staða','Leikir','Sigrar','Jafntefli','Sett','Mörk','Stoðs.','G+A','Sjálfsm.'])
   expect(host.textContent).toContain('KVÖLDINU LOKIÐ')
   expect(host.textContent).toContain('1 leikir')
   expect(host.textContent).toContain('Varamaður')
@@ -89,6 +89,7 @@ it('buzzes on first timeout, asks for outgoing team, then prepares READY without
   expect((await db.games.get(game.id))?.winningTeamId).toBeNull()
   const next = (await db.games.toArray()).find(g=>g.status==='ready')!
   expect(next.waitingTeamId).toBe(game.holderTeamId)
+  expect([...host.querySelectorAll('.summary-numbers div')].filter(d => d.querySelector('dt')?.textContent === 'Jafntefli').map(d => d.querySelector('dd')?.textContent)).toEqual(['1','1','0'])
 })
 
 it('fourth goal resets the scoreboard and Undo restores the winning set transaction', async () => {
@@ -102,9 +103,20 @@ it('fourth goal resets the scoreboard and Undo restores the winning set transact
     await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
   }
   expect(host.textContent).toContain('vann sett 1')
+  const completedSet = host.querySelector('[aria-label="Sett 1"]')!
+  expect([...completedSet.querySelectorAll('tbody td')].map(t => t.textContent)).toEqual(['4', '4 / 4', '0', '0 / 4'])
+  const nextSet = host.querySelector('[aria-label="Sett 2"]')!
+  expect(nextSet.textContent).toContain('Nýtt sett · tilbúið')
+  expect([...nextSet.querySelectorAll('tbody td')].map(t => t.textContent)).toEqual(['0', '0 / 4', '0', '0 / 4'])
+  expect([...host.querySelectorAll('.night-team-roster li')].find(r => r.textContent?.includes('Anna'))?.textContent).toContain('4')
+  expect(host.textContent).not.toContain('Unnin sett')
+  const anna = [...host.querySelectorAll('.summary-table tbody tr')].find(r => r.textContent?.includes('Anna'))!
+  expect(anna.querySelector('td')?.textContent).toBe('1')
   expect([...host.querySelectorAll('.score-team strong')].map(t=>t.textContent)).toEqual(['0','0'])
   await click('Afturkalla síðasta leik')
   await waitFor(() => expect(button('HALDA ÁFRAM')).toBeDefined())
   expect([...host.querySelectorAll('.score-team strong')].map(t=>t.textContent)).toEqual(['3','0'])
   expect(await db.sets.count()).toBe(1)
+  expect(host.querySelector('[aria-label="Sett 2"]')).toBeNull()
+  expect([...host.querySelectorAll('[aria-label="Sett 1"] tbody td')].map(t => t.textContent)).toEqual(['3', '3 / 4', '0', '0 / 4'])
 })

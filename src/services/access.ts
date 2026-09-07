@@ -9,6 +9,7 @@ const CACHE_KEY = 'manudagsboltinn-access'
 export interface AppAccess {
   userId: string
   role: 'admin' | 'recorder'
+  workflow?: 'submission'
   playedOn?: string | null
   seasonId?: string | null
 }
@@ -25,10 +26,10 @@ export async function activateAccess(access: AppAccess): Promise<void> {
     const previous = cachedAccess()
     const changed = previous
       ? previous.userId !== access.userId || previous.role !== access.role
-        || (access.role === 'recorder' && (previous.playedOn !== access.playedOn || previous.seasonId !== access.seasonId))
+        || (access.role === 'recorder' && access.workflow !== 'submission' && (previous.playedOn !== access.playedOn || previous.seasonId !== access.seasonId))
       : access.role !== 'admin'
     if (changed) {
-      if (await db.syncQueue.count()) throw new Error('Ósendar breytingar eru á tækinu. Samstilltu með fyrri aðgangi áður en skipt er um aðgang eða kvöld.')
+      if (await hasUnsentWork()) throw new Error('Ósendar breytingar eru á tækinu. Samstilltu með fyrri aðgangi áður en skipt er um aðgang eða kvöld.')
       for (const table of db.tables) await table.clear()
     }
   }))
@@ -57,12 +58,19 @@ export async function loadAccess(expectedRole?: AppAccess['role']): Promise<AppA
 
 export async function signOutSafely(): Promise<void> {
   await withSyncLock(async () => {
-    if (await db.syncQueue.count()) throw new Error('Samstilltu ósendar breytingar áður en þú skráir þig út.')
+    if (await hasUnsentWork()) throw new Error('Sendu kvöldin til yfirferðar og samstilltu ósendar breytingar áður en þú skráir þig út.')
     const result = await supabase?.auth.signOut({ scope: 'local' })
     if (result?.error) throw new Error('Útskráning mistókst. Reyndu aftur.')
     await db.transaction('rw', db.tables, async () => { for (const table of db.tables) await table.clear() })
     localStorage.removeItem(CACHE_KEY)
   })
+}
+
+export function usesSubmissions() { const a = cachedAccess(); return a?.role === 'recorder' && a.workflow === 'submission' }
+async function hasUnsentWork() {
+  if (!usesSubmissions()) return await db.syncQueue.count() > 0
+  const sent = new Set((await db.submissions.filter(s => s.state !== 'queued').toArray()).map(s => s.sessionId))
+  return (await db.sessions.toArray()).some(s => !sent.has(s.id))
 }
 
 export function allowedRoute(role: AppAccess['role'], route: string): boolean {

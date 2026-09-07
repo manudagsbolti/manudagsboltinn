@@ -49,6 +49,11 @@ Role normally changes only between Spring/Autumn seasons, but the system must su
 Role is therefore time-bound, not a permanent property on `players`.
 
 Every `session_player` stores `role_at_session`. This is an immutable snapshot.
+Exception confirmed by the owner: an administrator may explicitly correct a
+mistaken snapshot for one draft/completed night, with a required reason and
+history of previous/new roles and correction time. This never changes general
+role periods, other nights or game facts. Normal role/date edits still preserve
+snapshots. Shared recorders cannot correct snapshots or their history.
 
 Example: a player plays five nights as substitute, then becomes regular. The first five nights remain substitute statistics forever; only later sessions count toward the regular competition.
 
@@ -60,6 +65,19 @@ Operators can select, create and edit named seasons with explicit start/end date
 Defaults are January 1–April 30 and September 1–December 31. May–August is off;
 an operator may explicitly create a custom season to record an exception.
 Changing season dates does not reassign existing sessions or rewrite their role snapshots.
+Administrators manage seasons and their nights in “Annir og kvöld”, with saved
+date ranges, night counts and warnings for nights outside an edited range.
+Administrators may correct a draft/completed night's date and explicitly choose
+its season. Live nights must be finished first. Corrections preserve all event
+facts and role snapshots; moving a night changes which season includes it.
+Player management displays both role names separately from explicit role-change
+actions, confirms the effective date, and distinguishes active/inactive roster
+visibility from REGULAR/SUBSTITUTE status. Viewing players does not create seasons.
+Administrators may delete one draft/completed night after seeing its date and
+season and typing EYÐA. Delete its attendance, backfill, teams, games, events,
+role-correction history and Undo; preserve all players, seasons and other nights.
+Queue the cloud delete offline and execute it atomically with retry receipts.
+Shared recorders cannot delete a night. Live nights must be finished first.
 Existing August–July records remain attached to their original season IDs.
 
 ### 4.1 Create session
@@ -265,6 +283,12 @@ For each team show at least:
 
 - mini-game wins (`Sigrar`)
 - set wins (`Sett`)
+- draws (`Jafntefli`): completed timeout games without a winner. Count once
+  for the night and once for each on-court team/player; exclude the waiting team.
+  Derive from raw games, including Undo. Aggregate-only backfills have unknown
+  draws, displayed as — rather than zero. Draws award no mini-game or set win.
+- Team cards center their totals and show each player on a separate line with
+  goals scored for that roster. Own goals remain separate from player goals.
 
 Also useful/allowed:
 
@@ -393,31 +417,23 @@ V1 assumes one active live recorder device at a time. Real-time multi-device col
 
 ## 15. PWA and hosting
 
-### Shared recording access (confirmed September 2026)
+### Shared submission access (confirmed September 2026)
 
-The public app opens on a password gate. For the initial group deployment,
-recorders use one shared password; the administrator uses a separate personal
-account. Supabase Auth verifies passwords in the backend. No database settings,
-Supabase dashboard access, email verification or individual recorder account
-setup is required of the players using the shared login.
+Recorders sign in with one shared password, choose any valid playing date,
+record a night offline and explicitly submit the completed night for review.
+No pre-opened date, season selection, person name or individual account is required.
+Only local recordings and a player roster are visible to recorders; neither other
+nights nor season statistics can be read through the UI or backend.
 
-The administrator opens one recording date and selects its season. Shared
-recorders can select attendance, add a new substitute, set up teams, operate the
-live recorder and see that night's summary. They cannot read other nights,
-season standings, analytics, player ratings, backups of historical data or
-administrative settings. These restrictions apply to backend APIs and raw
-tables as well as UI routes. Only the administrator decides when to distribute
-season results; no automatic publication is introduced here.
-
-App access roles (administrator/recorder) are independent of REGULAR/SUBSTITUTE
-player status. Shared recording does not identify which individual made a change.
-One recorder device is used at a time. The recording window stays open until
-the administrator closes or changes it; first synchronize the recording device.
-
-First use requires a network connection to authenticate and download the roster
-and recording context. Previously authorized local recording and recovery must
-remain available offline. Logout/account/window changes must preserve unsent
-changes and remove cached historical data before a different scope is opened.
+Submissions remain separate from approved raw facts. An administrator reviews
+team/player/set results, corrects the date, selects the season and confirms or
+changes player roles before approval. Only approved submissions enter season
+statistics. Admin-created nights retain their existing direct recording flow.
+Rejection keeps a receipt so retries do not re-open the submission. It does not
+physically erase the rejected submission. Frozen submissions retry offline
+without duplication; unsent nights prevent logout or switching accounts.
+One device records each night. There is no person/device attribution UI.
+See docs/SUBMISSION_REVIEW.md for setup, privacy and recovery details.
 
 V1 is a web app/PWA, not a native App Store/Play Store application.
 

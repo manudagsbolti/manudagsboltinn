@@ -7,6 +7,7 @@ import { flushSyncQueue } from './syncQueue'
 import { readLocalSyncState, syncTables, toSnakeCase } from './syncData'
 import setupSql from '../../supabase/setup-empty-project.sql?raw'
 import { restoreBackup } from './backup'
+import { completeSession, correctSessionPlayerRole, deleteSession, createHistoricalSession } from '../data/repository'
 
 const cloud = vi.hoisted(() => ({ rpc: vi.fn(), getSession: vi.fn() }))
 vi.mock('../lib/supabase', () => ({
@@ -52,7 +53,9 @@ beforeAll(async () => {
   for (const file of Object.keys(migrations).sort()) {
     expect(setupSql).toContain(migrations[file].trim())
   }
-  await pg.exec(setupSql)
+  // Regression coverage for the deployed pre-submission contract (001–010).
+  // submissionReview.test.ts exercises the full latest generated setup.
+  await pg.exec(Object.keys(migrations).sort().filter(f => !f.endsWith('011_submission_review.sql')).map(f => migrations[f]).join('\n'))
   await pg.query('insert into public.app_admins values ($1)', [admin])
   await pg.query('insert into public.app_recorders values ($1)', [recorder])
 }, 30_000)
@@ -185,6 +188,73 @@ describe('shared recorder permissions enforced by PostgreSQL', () => {
 })
 
 describe('actual PostgreSQL cloud contract', () => {
+  it('deletes one recorded night with queued writes, retries a lost response, and preserves players, season and another manual night', async () => {
+    const { session, players } = await setup()
+    await score()
+    await completeSession(session.id)
+    const other = await createHistoricalSession({ playedOn: '2026-09-14', teams: [{ code: 'A', name: 'A', color: 'red', playerIds: [players[0].id] }], rounds: [{ roundNo: 1, teamGoals: { A: 4 } }], playerGoals: [{ playerId: players[0].id, goals: 4 }] })
+    online(true)
+    expect(await flushSyncQueue()).toMatchObject({ failed: 0 })
+    online(false)
+    await correctSessionPlayerRole(session.id, players[0].id, 'REGULAR', 'Test')
+    await deleteSession(session.id)
+    expect(await db.sessions.get(session.id)).toBeUndefined()
+    expect(await db.goals.count()).toBe(0)
+    expect(await db.games.count()).toBe(0)
+    expect(await db.sets.count()).toBe(0)
+    expect(await db.setTeams.count()).toBe(0)
+    expect(await db.setTeamMembers.count()).toBe(0)
+    expect(await db.timerEvents.count()).toBe(0)
+    expect(await db.undoActions.count()).toBe(0)
+    cloud.rpc.mockImplementationOnce(async (name, args) => { const result = await rpc(name, args); expect(result.error).toBeNull(); return { data: null, error: new Error('Lost response') } })
+    online(true)
+    expect((await flushSyncQueue()).failed).toBeGreaterThan(0)
+    const retried = await flushSyncQueue()
+    expect((await cloud.rpc.mock.results.at(-1)?.value)?.error?.message).toBeUndefined()
+    expect(retried).toMatchObject({ failed: 0 })
+    await syncCloud()
+    expect((await db.sessions.toArray()).map(s => s.id)).toEqual([other.id])
+    expect(await db.players.count()).toBe(players.length)
+    expect(await db.seasons.count()).toBe(1)
+    expect(await count('session_snapshots')).toBe(1)
+    online(false)
+    await deleteSession(other.id)
+    online(true)
+    expect(await flushSyncQueue()).toMatchObject({ failed: 0 })
+    expect(await count('session_backfills')).toBe(0)
+    expect(await count('session_players')).toBe(0)
+    expect(await count('session_snapshots')).toBe(0)
+    expect(await count('players')).toBe(players.length)
+  })
+  it('denies recorder deletion through both RPC and direct SQL, and refuses live-night deletion locally', async () => {
+    const { session } = await setup()
+    await expect(deleteSession(session.id)).rejects.toThrow('Ljúktu')
+    online(true); await flushSyncQueue()
+    await pg.query('insert into public.recording_window(id, played_on, season_id, is_open) values (true, $1, $2, true)', [session.playedOn, session.seasonId])
+    expect((await rpc('apply_sync_batch', { operations: [{ id: crypto.randomUUID(), table: 'sessions', operation: 'delete', entity_id: session.id }] }, recorder)).error).toBeTruthy()
+    await expect(pg.transaction(async tx => {
+      await tx.exec('set local role authenticated')
+      await tx.query("select set_config('request.jwt.claim.sub', $1, true)", [recorder])
+      await tx.query('delete from public.sessions where id = $1', [session.id])
+    })).rejects.toThrow('Admin access required')
+    expect(await count('sessions')).toBe(1)
+  })
+  it('syncs admin role corrections and history, restores them, and protects them from recorder writes', async () => {
+    const { session, players } = await setup()
+    await completeSession(session.id)
+    await correctSessionPlayerRole(session.id, players[0].id, 'REGULAR', 'Röng uppsetning')
+    online(true)
+    expect(await flushSyncQueue()).toMatchObject({ failed: 0 })
+    await pg.query('insert into public.recording_window(id, played_on, season_id, is_open) values (true, $1, $2, true)', [session.playedOn, session.seasonId])
+    const row = (await db.sessionPlayers.get([session.id, players[0].id]))!
+    const attack = { id: crypto.randomUUID(), table: 'session_players', operation: 'upsert', payload: toSnakeCase({ ...row, roleAtSession: 'SUBSTITUTE', roleCorrections: [] }) }
+    expect((await rpc('apply_sync_batch', { operations: [attack] }, recorder)).error).toBeNull()
+    await db.sessionPlayers.clear()
+    await syncCloud()
+    expect(await db.sessionPlayers.get([session.id, players[0].id])).toMatchObject({ roleAtSession: 'REGULAR', roleCorrections: [{ fromRole: 'SUBSTITUTE', toRole: 'REGULAR', reason: 'Röng uppsetning' }] })
+    const snapshot = await pg.query<{ history: unknown[] }>("select payload->'session_players' as history from public.session_snapshots where session_id = $1", [session.id])
+    expect(snapshot.rows[0].history).toEqual(expect.arrayContaining([expect.objectContaining({ player_id: players[0].id, role_corrections: expect.any(Array) })]))
+  })
   it('uploads a whole offline night and its raw snapshot, then syncs Undo across the fourth win', async () => {
     const { session } = await setup()
     for (let i = 0; i < 4; i++) await score()

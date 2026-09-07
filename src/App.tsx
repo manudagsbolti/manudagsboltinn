@@ -14,6 +14,7 @@ import { ThemeToggle, type ColorTheme } from './components/ThemeToggle'
 import { startAutoSync } from './services/autoSync'
 import { AccessGate } from './components/AccessGate'
 import { RecorderHome } from './components/RecorderHome'
+import { SeasonsScreen } from './components/SeasonsScreen'
 import { allowedRoute, type AppAccess } from './services/access'
 import './styles.css'
 
@@ -22,7 +23,7 @@ type Route = { name: MainRoute | 'new' | 'manual' | 'setup' | 'live' | 'summary'
 function parseRoute(): Route {
   const hash = location.hash.replace(/^#\/?/, '')
   const [name, id] = hash.split('/')
-  if (['players','stats','cloud','new','manual','setup','live','summary','presentation'].includes(name)) return { name: name as Route['name'], id }
+  if (['players','seasons','stats','cloud','new','manual','setup','live','summary','presentation'].includes(name)) return { name: name as Route['name'], id }
   return { name: 'home' }
 }
 
@@ -55,13 +56,14 @@ function AppContent({ access, signOut }: { access: AppAccess; signOut: () => voi
     <div className="app-content">
       {route.name === 'home' && (recorder ? <RecorderHome access={access} go={go} signOut={signOut}/> : <HomeScreen onNew={()=>go('new')} onManual={()=>go('manual')} onContinue={id=>go('live',id)} onSetup={id=>go('setup',id)} onSummary={id=>go('summary',id)}/>)}
       {route.name === 'players' && <PlayersScreen/>}
+      {route.name === 'seasons' && <SeasonsScreen onOpen={s => go(s.status === 'completed' ? 'summary' : s.status === 'live' ? 'live' : 'setup', s.id)} />}
       {route.name === 'stats' && <StatsScreen onPresent={year=>go('presentation',String(year))}/>}
       {route.name === 'cloud' && <CloudScreen signOut={signOut}/>}
-      {route.name === 'new' && (!recorder || (access.playedOn && access.seasonId)) && <NewSessionScreen recordingDate={recorder ? access.playedOn! : undefined} recordingSeasonId={recorder ? access.seasonId! : undefined} onCreated={id=>go('setup',id)} onCancel={()=>go('home')}/>}
+      {route.name === 'new' && <NewSessionScreen recorder={recorder} onCreated={id=>go('setup',id)} onCancel={()=>go('home')}/>}
       {route.name === 'manual' && <HistoricalSessionScreen onSaved={id=>go('summary',id)} onCancel={()=>go('home')}/>}
       {route.name === 'setup' && route.id && <TeamSetupScreen recorder={recorder} sessionId={route.id} onReady={()=>go('live',route.id)} onCancel={()=>go('home')}/>}
       {route.name === 'live' && route.id && <LiveSessionScreen sessionId={route.id} onReshuffle={()=>go('setup',route.id)} onFinish={()=>go('summary',route.id)} onBack={()=>go('home')}/>}
-      {route.name === 'summary' && route.id && <SessionSummaryScreen sessionId={route.id} onBack={()=>go('home')}/>}
+      {route.name === 'summary' && route.id && <SessionSummaryScreen recorder={recorder} sessionId={route.id} onBack={()=>go('home')}/>}
       {route.name === 'presentation' && route.id && <SeasonPresentationScreen seasonId={route.id} onBack={()=>go('stats')}/>}
     </div>
     {!isImmersive && !recorder && <BottomNav current={route.name as MainRoute} navigate={main}/>}

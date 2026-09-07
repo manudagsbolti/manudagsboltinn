@@ -16,7 +16,7 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 ### Nýr, tómur grunnur
 
 1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
-2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–008 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–011 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
 3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
 4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 
@@ -45,75 +45,45 @@ Ath: publishable key má vera í frontend. Aldrei setja `service_role` key í þ
 
 Keyra aðeins migrations sem hafa ekki verið keyrðar, í númeraröð. Ekki nota `database/schema.sql`, sem tilheyrir eldra, óvirku appi. Migration 007 bætir við `app_admins`, herðir RLS, lokar eldri tölfræðiviews fyrir frontend og býr til `apply_sync_batch`, `get_sync_state`, `sync_operations` og `session_snapshots`. Stjórnandi þarf alltaf færslu í `app_admins`, líka þegar hann var áður innskráður.
 
-### Sameiginlegt lykilorð fyrir strákana
+### Submission review
 
-Ef fyrri uppsetning (001–007) er þegar komin í Supabase, keyra **aðeins**
-`supabase/migrations/008_shared_recording_access.sql` í SQL Editor.
-Ekki endurkeyra `setup-empty-project.sql` á þeim grunni.
-
-1. Í **Authentication → Users → Add user → Create new user** stofna
-   `skraning@manudagsboltinn.com` með sameiginlega lykilorðinu sem þú velur.
-   Velja **Auto Confirm User**. Þetta er fast auðkenni sameiginlegs app-aðgangs;
-   strákarnir þurfa ekki að opna þetta pósthólf. Enginn póstur er sendur af appinu.
-2. Afrita UID þess notanda og keyra í SQL Editor:
-
-   ```sql
-   insert into public.app_recorders(user_id)
-   values ('UID-SAMEIGINLEGA-NOTANDANS')
-   on conflict (user_id) do nothing;
-   ```
-
-   Þessi notandi á **ekki** að vera í `app_admins`. Þinn eigin aðgangur helst þar.
-3. Opna appið, velja **Stjórnandaaðgangur** og skrá inn með þínu netfangi/lykilorði.
-4. Stofna/breyta önn undir **Leikmenn → Annir** ef þarf. Fara í **Sync → Aðgangur
-   að leikskráningu**, velja dagsetningu og önn, haka við **Opna fyrir skráningu**
-   og velja **Vista aðgang**. Dagsetning verður að vera innan annarinnar.
-5. Strákarnir opna sömu slóð og slá aðeins inn sameiginlega lykilorðið.
-   Fyrsta innskráning sækir leikmannalista og gögn opna kvöldsins. Eftir það
-   opnar tækið yfirleitt vistuðu aðgangslotuna. Hnappur á forsíðu sækir/samstillir.
-
-Þeir geta valið mætingu, bætt við nýjum varamanni, raðað í lið og skráð kvöldið.
-Annir, eldri kvöld, tölfræðisíður, styrkleikamat og stjórnunarverkfæri eru ekki
-aðgengileg. RLS og RPC staðfesta sömu takmarkanir í gagnagrunninum.
-
-Sameiginlega lykilorðið er ekki í `.env.local`, Git eða JavaScript-búntinum.
-Það er lykilorð staðfests Supabase Auth notanda. Breyta því í Auth-stjórnun
-þegar þarf. Til að loka strax fyrir skýjaskrif má loka skráningarglugganum í
-appinu eða fjarlægja UID úr `app_recorders`; þegar útgefnar aðgangslotur verða
-ógildar þarf að skrá inn aftur. Að breyta lykilorði einu og sér er ekki loforð
-um að öll þegar innskráð tæki missi aðgang samstundis.
-
-Hafa eitt skráningartæki í einu og samstilla áður en skipt er um tæki, kvöld
-eða aðgang. Ósendar breytingar hindra útskráningu og skipti um aðgang/glugga
-á viðkomandi tæki. Ef stjórnandi lokaði glugganum of snemma, opna sömu
-dagsetningu/önn aftur svo tækið geti sent gögnin. Offline gögn eru varðveitt.
-
-Í production er appið lokað ef Supabase-stillingar vantar. Local-only þróun
-án stillinga er áfram leyfð með `npm run dev`. Aðgangsbreytingarnar þurfa
-endurræsingu á dev server eða nýtt production build.
-
-### Prófun með tveimur aðgöngum
-
-- Prófa stjórnanda í einum vafra og sameiginlega aðganginn í öðrum.
-- Opna `#/stats`, `#/players`, `#/cloud` og `#/presentation/...` sem skráningaraðili:
-  appið sýnir aðeins skráningarforsíðuna. Eldri gögn eiga ekki að vera í local DB.
-- Prófa Start/mark/Undo offline, tengjast aftur og staðfesta gögn sem stjórnandi.
-- Staðfesta að samantekt kvöldsins sé aðgengileg en engin annartölfræði birtist.
-
-- Skrá prófkvöld offline, með marki/stoðsendingu og sjálfsmarki. Tengjast aftur; biðröðin á að tæmast.
-- Skoða `sessions`, `games`, `goals` og `session_snapshots` í Table Editor. Snapshot er endurheimtuafrit af hráum staðreyndum; tölfræði er enn reiknuð úr staðreyndum.
-- Undo eftir fjórða sigur á að fjarlægja næsta tilbúna sett/leik í skýinu og merkja afturkallað mark með `deleted_at`.
-- Opna annan vafra, skrá inn og velja `Sync núna`: sama saga/samantekt birtist. RUNNING leikur endurheimtist PAUSED þegar live skjár er opnaður. Undo-sagan er aðeins á upprunalega tækinu.
-- Ekki skrá sama leik samtímis á tveimur tækjum. Samstilla bæði áður en skipt er um skráningartæki.
-- Ef skráning heldur áfram meðan gögn eru sótt, heldur appið local breytingunum og frestar niðurhalinu. Velja aftur `Sync núna` þegar hlé er á skráningu.
-
-Tengingarvillu má greina án þess að birta lykla: athuga að project sé virkt, migration 007 sé komin inn og rétt Auth UID sé í `app_admins`. Ekki afrita innihald `.env.local` í samtöl eða Git.
-
-Ef eldri local gögn eru til en engar sendingar í bið og nýr skýjagrunnur er alveg tómur, stöðvar appið niðurhal í stað þess að eyða gögnunum. Velja **Export backup**, varðveita skrána, svo **Restore backup** með sömu skrá og **Sync núna**. Restore setur hrá gögn í rétta sendingarröð en flytur ekki Undo-sögu.
+See [Innsending og yfirferd](SUBMISSION_REVIEW.md) for the current shared-password
+setup. Migration 011 replaces the old pre-opened recording window. Apply only
+unapplied migrations in order; never rerun empty-project setup on an existing DB.
 
 ## 3. Fyrsta önnin
 
-Í virka appinu: **Leikmenn → Annir** til að stofna/breyta önn og **Nýr leikdagur → Önn** til að velja hana. Sjálfgefið er janúar–apríl og september–desember; maí–ágúst er sumarfrí. Sérsniðnar dagsetningar eru leyfðar. Fyrri kvöld halda vistuðu season ID og role snapshoti.
+### Eyða prófkvöldi
+
+Keyra `supabase/migrations/010_delete_session.sql` í SQL Editor eftir 009.
+Ekki endurkeyra heildaruppsetningu á grunni sem er þegar til.
+Sem stjórnandi: **Annir og kvöld → önn → Eyða kvöldi**. Staðfestingin sýnir
+dagsetningu og önn; slá þarf inn **EYÐA** og velja **Staðfesta eyðingu**.
+Ljúka þarf live-kvöldi fyrst. Öllum skráningum völdu kvölds er eytt, þar með
+talið breytingasögu, en leikmenn, annir og önnur kvöld haldast.
+Eyðing fer í sendingarbið offline. Samstilla á upprunatæki áður en farið er
+í annað tæki og sækja síðan gögn þar. Ekki endurheimta gamalt backup eftir
+eyðingu nema ætlunin sé að endurheimta kvöldið líka. Enginn Undo er á eyðingu.
+
+### Leiðrétting á leikmannastöðu í skráðu kvöldi
+
+Ef migrations 001–008 eru komnar inn: keyra aðeins
+`supabase/migrations/009_session_role_corrections.sql` í SQL Editor áður en
+leiðréttingar eru samstilltar. Uppsetning fyrir tóman grunn inniheldur nú 009 líka.
+
+Sem stjórnandi: **Annir og kvöld → opna önn → kvöld → Leiðrétta leikmannastöður**.
+Velja leikmann, rétta stöðu og ástæðu, svo **Staðfesta leiðréttingu**.
+Breytingasaga sýnir fyrri/nýja stöðu, tíma og ástæðu. Leiðrétting gildir aðeins
+fyrir þetta kvöld og færir framlag þess milli fastamanna-/varamannatölfræði.
+Til að afturkalla leiðréttingu er önnur leiðrétting gerð; fyrri saga helst.
+Leikgögn, önnur kvöld og almenn staða haldast. Live-kvöldi þarf að ljúka fyrst.
+Engin leiðrétting er sjálfkrafa framkvæmd á fyrirliggjandi gögnum.
+
+Í virka appinu: **Annir og kvöld** til að stofna/breyta önn og **Nýr leikdagur → Önn** til að velja hana. Sjálfgefið er janúar–apríl og september–desember; maí–ágúst er sumarfrí. Sérsniðnar dagsetningar eru leyfðar. Fyrri kvöld halda vistuðu season ID og role snapshoti.
+
+Opna önn í **Annir og kvöld** til að sjá skráð kvöld hennar. **Breyta dagsetningu / önn** leiðréttir kvöld án endurskráningar gagna. Velja dagsetningu innan valinnar annar og staðfesta. Ef kvöldið færist milli anna flyst framlag þess í annartölfræði en skráð fastamanns-/varamannshlutverk haldast. Ljúka þarf live-kvöldi áður en það er leiðrétt.
+
+Undir **Leikmenn** sjást fullar stöðumerkingar, fjöldi fastamanna/varamanna og gildisdagur. Hnappurinn **Nota upphaf annar** hjálpar við fyrstu uppsetningu; **Gera að fastamanni/varamanni** staðfestir breytinguna frá völdum degi. Virkur/óvirkur er óháð hlutverki og stjórnar mætingarlistanum. Nýir leikmenn eru sjálfgefið varamenn.
 
 1. Stjórnun -> stofna önn, t.d. `2026 Haust`.
 2. Bæta leikmönnum inn (má líma eitt nafn í línu).

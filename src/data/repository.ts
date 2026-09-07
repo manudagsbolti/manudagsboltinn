@@ -7,6 +7,7 @@ import { currentRemainingSeconds, getSetWinner } from '../domain/rules'
 import type { Game, Goal, Player, PlayerRole, PlayerRolePeriod, Season, Session, SessionBackfill, SetRecord, SetTeam, SetTeamMember, UUID } from '../domain/types'
 import { enqueueSync, flushSyncQueue } from '../services/syncQueue'
 import { id, nowIso } from '../utils/id'
+import { usesSubmissions } from '../services/access'
 
 async function queuedPut(table: Parameters<typeof enqueueSync>[0]['table'], entityId: string, payload: unknown) {
   await enqueueSync({ id: id(), table, entityId, operation: 'upsert', payload, createdAt: nowIso() })
@@ -76,11 +77,13 @@ async function _createSession(input: {
   pointsToWinSet: number
 }): Promise<Session> {
   const now = nowIso()
-  const season = input.seasonId ? await db.seasons.get(input.seasonId) : await ensureSeasonForDate(input.playedOn)
+  const season = usesSubmissions() ? { id: '', startsOn: input.playedOn, endsOn: input.playedOn }
+    : input.seasonId ? await db.seasons.get(input.seasonId) : await ensureSeasonForDate(input.playedOn)
+  validateSeason({ name: 'Kvöld', startsOn: input.playedOn, endsOn: input.playedOn })
   if (!season || input.playedOn < season.startsOn || (season.endsOn && input.playedOn > season.endsOn)) throw new Error('Dagsetningin þarf að vera innan valinnar annar.')
   const periods = await db.rolePeriods.where('seasonId').equals(season.id).toArray()
   const session: Session = {
-    id: id(), seasonId: season.id, playedOn: input.playedOn, status: 'draft', gameDurationSeconds: input.gameDurationSeconds,
+    id: id(), seasonId: season.id || null, playedOn: input.playedOn, status: 'draft', gameDurationSeconds: input.gameDurationSeconds,
     winsPerPoint: input.winsPerPoint, pointsToWinSet: input.pointsToWinSet, startedAt: null, completedAt: null,
     createdAt: now, updatedAt: now,
   }
@@ -368,7 +371,7 @@ async function addTimerEvent(gameId: UUID, eventType: 'START' | 'PAUSE' | 'RESUM
   return event.id
 }
 
-async function queuedDelete(table: 'games' | 'sets' | 'timer_events', entityId: UUID) {
+async function queuedDelete(table: 'games' | 'sets' | 'timer_events' | 'sessions', entityId: UUID) {
   await enqueueSync({ id: id(), table, entityId, operation: 'delete', payload: null, createdAt: nowIso() })
 }
 
@@ -432,4 +435,49 @@ export const saveSeason = localAction(async (input: { id?: UUID; name: string; s
   await db.seasons.put(season)
   await queuedPut('seasons', season.id, season)
   return season
+})
+
+export const correctSessionDate = localAction(async (sessionId: UUID, playedOn: string, seasonId: UUID) => {
+  const session = await db.sessions.get(sessionId)
+  const season = await db.seasons.get(seasonId)
+  validateSeason({ name: 'Dagsetning', startsOn: playedOn, endsOn: playedOn })
+  if (!session || !season) throw new Error('Kvöld eða önn fannst ekki.')
+  if (session.status === 'live') throw new Error('Ljúktu kvöldinu áður en dagsetningu er breytt.')
+  if (playedOn < season.startsOn || (season.endsOn && playedOn > season.endsOn)) throw new Error('Dagsetningin þarf að vera innan valinnar annar.')
+  const updated = { ...session, playedOn, seasonId, updatedAt: nowIso() }
+  await db.sessions.put(updated)
+  await queuedPut('sessions', sessionId, updated)
+})
+
+export const correctSessionPlayerRole = localAction(async (sessionId: UUID, playerId: UUID, role: PlayerRole, reason: string) => {
+  const session = await db.sessions.get(sessionId)
+  const row = await db.sessionPlayers.get([sessionId, playerId])
+  if (!session || !row) throw new Error('Leikmaður fannst ekki í kvöldinu.')
+  if (session.status === 'live') throw new Error('Ljúktu kvöldinu áður en skráð staða er leiðrétt.')
+  if (!['REGULAR', 'SUBSTITUTE'].includes(role) || !reason.trim()) throw new Error('Veldu stöðu og skráðu ástæðu leiðréttingar.')
+  if (row.roleAtSession === role) return
+  const updated = { ...row, roleAtSession: role, roleCorrections: [...(row.roleCorrections ?? []), { fromRole: row.roleAtSession, toRole: role, correctedAt: nowIso(), reason: reason.trim() }] }
+  await db.sessionPlayers.put(updated)
+  await queuedPut('session_players', `${sessionId}:${playerId}`, updated)
+})
+
+export const deleteSession = localAction(async (sessionId: UUID) => {
+  const session = await db.sessions.get(sessionId)
+  if (!session) return
+  if (session.status === 'live') throw new Error('Ljúktu kvöldinu áður en því er eytt.')
+  const setIds = (await db.sets.where('sessionId').equals(sessionId).toArray()).map(s => s.id)
+  const gameIds = (await db.games.where('setId').anyOf(setIds).toArray()).map(g => g.id)
+  await db.goals.where('gameId').anyOf(gameIds).delete()
+  await db.timerEvents.where('gameId').anyOf(gameIds).delete()
+  await db.games.bulkDelete(gameIds)
+  await db.setTeamMembers.where('setId').anyOf(setIds).delete()
+  await db.setTeams.where('setId').anyOf(setIds).delete()
+  await db.sets.bulkDelete(setIds)
+  await db.sessionPlayers.where('sessionId').equals(sessionId).delete()
+  await db.sessionBackfills.delete(sessionId)
+  await db.undoActions.where('sessionId').equals(sessionId).delete()
+  await db.sessions.delete(sessionId)
+  // Retain earlier queued writes: they may already be in flight. Ordered delete
+  // follows them, and the server applies it atomically with retry receipts.
+  await queuedDelete('sessions', sessionId)
 })

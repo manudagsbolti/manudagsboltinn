@@ -59,7 +59,7 @@ it('blocks logout with unsent events, then clears local facts and the cached rol
   expect(cachedAccess()).toBeNull()
 })
 it('blocks direct hash routes to season statistics, admin, history import and presentation', () => {
-  for (const route of ['stats', 'players', 'cloud', 'manual', 'presentation']) expect(allowedRoute('recorder', route)).toBe(false)
+  for (const route of ['stats', 'players', 'seasons', 'cloud', 'manual', 'presentation']) expect(allowedRoute('recorder', route)).toBe(false)
   for (const route of ['home', 'new', 'setup', 'live', 'summary']) expect(allowedRoute('recorder', route)).toBe(true)
   expect(allowedRoute('admin', 'stats')).toBe(true)
 })
