@@ -1,3 +1,10 @@
+import type { Season } from './types'
+
+export function uniqueSeasonForDate(seasons: Season[], date: string) {
+  const matching = seasons.filter(s => date && s.startsOn <= date && (!s.endsOn || s.endsOn >= date))
+  return matching.length === 1 ? matching[0] : undefined
+}
+
 export function defaultSeasonForDate(date: string) {
   const [year, month] = date.split('-').map(Number)
   if (month >= 9) return { name: `${year} Haust`, startsOn: `${year}-09-01`, endsOn: `${year}-12-31` }

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { flushSyncQueueUnlocked } from './syncQueue'
 import { withSyncLock } from './syncLock'
 import { usesSubmissions } from './access'
+import { cacheRecorderRatings } from './recorderRatings'
 import { fromSnakeCase, parseCloudState, readLocalSyncState, sameRows, syncTables, type SyncState } from './syncData'
 
 export function syncCloud(): Promise<{ pushed: number; pulled: number; deferredPull: boolean }> {
@@ -25,6 +26,9 @@ export function syncCloud(): Promise<{ pushed: number; pulled: number; deferredP
           if (!await db.players.get(player.id)) await db.players.add(player)
         }
       })
+      const ratingResponse = await supabase.rpc('get_submission_ratings')
+      if (ratingResponse.error) throw new Error('Leikmenn sóttir en styrkleikamat náðist ekki. Eldra mat helst á tækinu; athugaðu migration 013.')
+      await cacheRecorderRatings(ratingResponse.data)
       return { pushed: pushed.synced, pulled: response.data.length, deferredPull: false }
     }
     const baseline = await db.transaction('r', db.tables, readLocalSyncState)

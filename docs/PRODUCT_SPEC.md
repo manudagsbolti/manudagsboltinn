@@ -534,3 +534,7 @@ The architecture should make later analytics possible, but V1 priority is a robu
 ### Draft attendance editing
 
 Before creating the first set, the operator may return from team assignment to the group and edit attendance in the existing draft night. Preserve its ID, date, season and retained player role snapshots. Added players snapshot their role on the night date. Saving resets the proposed draw; cancelling preserves the saved group. Once a set exists, this draft editor is unavailable.
+
+Shared recorders may use weighted or fully random drawing. Weighted draws use downloaded season strength derived from approved live and manual results for all roles. Display the season and fetch date; missing ratings use neutral 100 with explicit notice. Cached inputs permit offline drawing without access to raw history.
+
+Attendance selection groups regulars above substitutes based on the selected night date and season. Select-all affects regulars only and preserves individually selected substitutes. Shared users use downloaded role periods for display only; approval still assigns authoritative snapshots. Unknown context must not label all players as substitutes. Review automatically selects the sole matching season; overlapping or absent seasons require explicit selection, with approval and role inputs unavailable until a valid season is selected.

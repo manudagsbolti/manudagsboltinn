@@ -23,6 +23,23 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 const button = (text: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.includes(text))!
 async function click(text: string) { await act(async () => { button(text).click() }) }
+it('offers weighted drawing to recorders using cached season ratings offline', async () => {
+  const players = []
+  for (const name of ['Anna','Ari','Bára','Bjarni']) players.push(await addPlayer(name))
+  const session = await createSession({playedOn:'2026-09-07',playerIds:players.map(p=>p.id),...DEFAULT_RULES})
+  const season = (await db.seasons.toArray())[0]
+  await db.ratingCache.put({id:season.id,season,ratings:Object.fromEntries(players.map((p,i)=>[p.id,80+i*15])),fetchedAt:'2026-09-07T12:00:00Z'})
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+  await act(async () => root.render(createElement(TeamSetupScreen,{sessionId:session.id,recorder:true,onReady:vi.fn(),onCancel:vi.fn()})))
+  await waitFor(() => expect(button('Full random')?.classList.contains('selected')).toBe(true))
+  await click('Weighted random')
+  await waitFor(() => expect(host.textContent).toContain('R 125'))
+  expect(button('Weighted random')).toBeDefined()
+  expect(host.textContent).toContain('Virkar án nets')
+  await click('SKIPTA Í LIÐ')
+  await waitFor(() => expect(button('Byrja Sett')).toBeDefined())
+  expect(host.querySelectorAll('.assignment-player')).toHaveLength(4)
+})
 it('edits the selected group in place and can cancel without leaving setup', async () => {
   const players = []
   for (const name of ['Anna', 'Ari', 'Bára', 'Bjarni', 'Cecilia']) players.push(await addPlayer(name))
@@ -95,6 +112,27 @@ it('cancelling finish preserves the live session with a paused timer', async () 
   expect(onFinish).not.toHaveBeenCalled()
 })
 
+it('records an own goal and distinguishes the scorer from the benefiting team in the overview', async () => {
+  await mount()
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt')
+  await waitFor(() => expect(button('Skrá sjálfsmark')).toBeDefined())
+  expect(button('Skrá sjálfsmark').classList.contains('own-goal-toggle')).toBe(true)
+  await click('Skrá sjálfsmark')
+  expect(host.querySelector('.own-goal-toggle')?.getAttribute('aria-pressed')).toBe('true')
+  await click('Bára')
+  await click('Vista sjálfsmark')
+  await waitFor(() => expect(host.querySelector('.own-goal-badge')?.textContent).toBe('1 sjálfsmark'))
+  const cards = [...host.querySelectorAll('.summary-team')]
+  const red = cards.find(c => c.querySelector('h3')?.textContent?.includes('Rautt'))!
+  const blue = cards.find(c => c.querySelector('h3')?.textContent?.includes('Blátt'))!
+  expect(red.querySelector('.own-goal-note')?.textContent).toContain('1 sjálfsmark andstæðinga')
+  expect(blue.querySelector('.own-goal-badge')?.parentElement?.textContent).toContain('Bára')
+  expect(blue.querySelector('.own-goal-badge')?.closest('li')?.querySelector('strong')?.textContent).toContain('0')
+  expect((await db.goals.toArray())[0]).toMatchObject({eventType:'OWN_GOAL',assistPlayerId:null})
+})
+
 it('requires two-step deletion, preserves a cancelled live night, and keeps the roster', async () => {
   const { session } = await mount()
   await click('STARTA LEIK')
@@ -159,9 +197,12 @@ it('fourth goal resets the scoreboard and Undo restores the winning set transact
   const anna = [...host.querySelectorAll('.summary-table tbody tr')].find(r => r.textContent?.includes('Anna'))!
   expect(anna.querySelector('td')?.textContent).toBe('1')
   expect([...host.querySelectorAll('.score-team strong')].map(t=>t.textContent)).toEqual(['0','0'])
+  expect(host.querySelector('[aria-label="Rautt: 1 unnin sett í kvöld"]')?.textContent).toBe('★')
+  expect(host.querySelector('[aria-label="Blátt: 0 unnin sett í kvöld"]')?.textContent).toBe('')
   await click('Afturkalla síðasta leik')
   await waitFor(() => expect(button('HALDA ÁFRAM')).toBeDefined())
   expect([...host.querySelectorAll('.score-team strong')].map(t=>t.textContent)).toEqual(['3','0'])
+  expect(host.querySelectorAll('.set-win-stars span')).toHaveLength(0)
   expect(await db.sets.count()).toBe(1)
   expect(host.querySelector('[aria-label="Sett 2"]')).toBeNull()
   expect([...host.querySelectorAll('[aria-label="Sett 1"] tbody td')].map(t => t.textContent)).toEqual(['3', '3 / 4', '0', '0 / 4'])

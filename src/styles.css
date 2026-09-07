@@ -171,6 +171,11 @@ h1,h2,h3{color:var(--text)}
 .night-team-roster{list-style:none;padding:0;margin:16px 0 0}
 .night-team-roster li{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line);text-align:left}
 .night-team-roster strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+.own-goal-toggle{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;margin:12px 0 18px;padding:12px 16px;border:2px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);font-size:15px;font-weight:700;cursor:pointer}
+.own-goal-toggle:hover,.own-goal-toggle[aria-pressed="true"]{border-color:var(--accent);background:var(--panel);color:var(--accent-fg)}
+.own-goal-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.own-goal-badge{display:block;width:fit-content;margin-top:4px;padding:3px 7px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;font-weight:600}
+.own-goal-note{padding:10px 12px;border:1px solid var(--line);border-radius:10px;line-height:1.5}
 .roster-goal-label{font-size:12px;font-weight:400;color:var(--muted)}
 
 /* Club artwork: contained crest and a quiet shirt-photo welcome. */
@@ -192,3 +197,5 @@ h1,h2,h3{color:var(--text)}
 .recorder-connection{padding:20px}.recorder-connection header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.recorder-connection h2{font-size:16px;margin:0}.recorder-network{font-size:12px;border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--muted)}.recorder-network.is-online{color:var(--accent-fg)}.recorder-connection p{font-size:14px;line-height:1.6}.recorder-help{color:var(--muted)}.recorder-connection>button{width:100%}.recorder-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}.recorder-footer p{font-size:12px;color:var(--muted)}.recorder-signout{min-width:108px}
 
 .delete-night{margin:18px 0}.delete-night>button{color:var(--danger)}.delete-night-dialog{padding:24px;width:min(480px,100%);max-height:90dvh;overflow:auto}.delete-night-dialog p{line-height:1.6;color:var(--muted)}.delete-night-buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.delete-night-buttons>button{flex:1}.delete-night-confirm{color:var(--danger);border-color:var(--danger)}
+.set-win-stars{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;min-height:22px;margin-top:6px;color:#eab308;font-size:20px;line-height:1.1}.set-win-stars span{filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+.attendance-group{margin:24px 0}.attendance-group-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.attendance-group-heading h2{margin:0 0 4px}.attendance-group-heading small{color:var(--muted)}
