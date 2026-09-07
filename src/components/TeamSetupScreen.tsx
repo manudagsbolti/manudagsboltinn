@@ -7,9 +7,9 @@ import { createSet, type TeamDraft } from '../data/repository'
 import { assignmentBalance, buildSeasonAnalytics, seasonStartYearForDate, weightedRandomAssignments } from '../services/seasonAnalytics'
 
 const TEAM_PRESETS = [
-  { name: 'Rautt', color: '#ef4444' },
   { name: 'Blátt', color: '#3b82f6' },
-  { name: 'Gult', color: '#facc15' },
+  { name: 'Grænt', color: '#22c55e' },
+  { name: 'Mislit', color: '#a855f7' },
 ]
 
 type SplitMode = 'full' | 'weighted'
@@ -33,9 +33,10 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       },
     }
   }, [sessionId])
+  const cachedRatings = useLiveQuery(() => db.ratingCache.toArray(), [])
   const [teamCount, setTeamCount] = useState(3)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
-  const [splitMode, setSplitMode] = useState<SplitMode>(recorder ? 'full' : 'weighted')
+  const [splitMode, setSplitMode] = useState<SplitMode>('full')
   const [stage, setStage] = useState<'roster'|'teams'>('roster')
   const [shuffling, setShuffling] = useState(false)
   const [seededCount, setSeededCount] = useState(false)
@@ -48,7 +49,8 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
 
   const seasonYear = data ? seasonStartYearForDate(data.session.playedOn) : seasonStartYearForDate(new Date().toISOString().slice(0,10))
   const analytics = useMemo(() => data && !recorder ? buildSeasonAnalytics(data.analyticsData, data.season ?? seasonYear, 'ALL') : null, [data, seasonYear, recorder])
-  const ratings = useMemo(() => new Map(analytics?.players.map(row => [row.playerId, row.rating]) ?? []), [analytics])
+  const ratingSnapshot = cachedRatings?.filter(r => data && r.season.startsOn <= data.session.playedOn && (!r.season.endsOn || r.season.endsOn >= data.session.playedOn)).sort((a,b) => Number(b.season.isActive)-Number(a.season.isActive))[0]
+  const ratings = useMemo(() => recorder ? new Map(Object.entries(ratingSnapshot?.ratings ?? {})) : new Map(analytics?.players.map(row => [row.playerId, row.rating]) ?? []), [analytics, recorder, ratingSnapshot])
 
   const split = async () => {
     if (!players.length || shuffling) return
@@ -80,9 +82,10 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
   if (editing && canEdit) return <NewSessionScreen recorder={recorder} edit={{ sessionId, playerIds: players.map(p => p.id), playedOn: data.session.playedOn, seasonId: data.session.seasonId ?? null }} onCancel={() => setEditing(false)} onCreated={() => { setEditing(false); setAssignments({}); setStage('roster'); setSeededCount(false) }}/>
 
   return <section className="screen page-screen wizard-screen">
+    {recorder && <p className="setup-hint">{ratingSnapshot ? `Styrkleikamat úr staðfestum úrslitum á ${ratingSnapshot.season.name}, þar með töldum handskráðum kvöldum. Sótt ${new Date(ratingSnapshot.fetchedAt).toLocaleDateString('is-IS')}. Virkar án nets.` : 'Ekkert styrkleikamat vistað fyrir þessa dagsetningu. Allir fá jafnt vægi þar til mat er sótt með „Athuga tengingu“ á forsíðunni.'}</p>}
     <DeleteNight sessionId={sessionId} onDeleted={onCancel}/>
     <button className="back-button" disabled={shuffling} onClick={() => stage === 'teams' ? setStage('roster') : canEdit ? setEditing(true) : onCancel()}>← {stage === 'teams' ? 'Til baka í hópinn' : canEdit ? 'Breyta hópnum' : 'Á forsíðu'}</button>
-    <div className="section-heading"><div><span className="eyebrow">SETT {data.setNo} · {analytics?.season.name}</span><h1>{stage === 'roster' ? 'Hópurinn í kvöld' : 'Liðin eru klár'}</h1></div>{stage==='teams' && !shuffling && <span className={`balance-badge ${balance>=90?'great':''}`}>⚖ {splitMode==='weighted'?`${balance}% jafnvægi`:'Full random'}</span>}</div>
+    <div className="section-heading"><div><span className="eyebrow">SETT {data.setNo} · {(analytics?.season.name ?? ratingSnapshot?.season.name ?? '')}</span><h1>{stage === 'roster' ? 'Hópurinn í kvöld' : 'Liðin eru klár'}</h1></div>{stage==='teams' && !shuffling && <span className={`balance-badge ${balance>=90?'great':''}`}>⚖ {splitMode==='weighted'?`${balance}% jafnvægi`:'Full random'}</span>}</div>
 
     {stage === 'roster' ? <>
       <article className="roster-card card">
@@ -94,10 +97,10 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       <div className="subheading"><span>LIÐASKIPTING</span><strong>Hvernig á að draga?</strong></div>
       <div className="segmented team-count"><button className={teamCount === 2 ? 'active' : ''} onClick={() => changeCount(2)}>2 lið</button><button className={teamCount === 3 ? 'active' : ''} onClick={() => changeCount(3)} disabled={players.length < 6}>3 lið</button></div>
       <div className="split-mode-grid">
-        {!recorder && <button className={`split-mode card ${splitMode==='weighted'?'selected':''}`} onClick={()=>setSplitMode('weighted')}><span>⚖</span><div><strong>Weighted random</strong><small>Random, en leitast við að jafna lið eftir tölfræði tímabilsins.</small></div><b>{splitMode==='weighted'?'✓':''}</b></button>}
+        {<button className={`split-mode card ${splitMode==='weighted'?'selected':''}`} onClick={()=>setSplitMode('weighted')}><span>⚖</span><div><strong>Weighted random</strong><small>Random, en leitast við að jafna lið eftir tölfræði tímabilsins.</small></div><b>{splitMode==='weighted'?'✓':''}</b></button>}
         <button className={`split-mode card ${splitMode==='full'?'selected':''}`} onClick={()=>setSplitMode('full')}><span>🎲</span><div><strong>Full random</strong><small>Engin tölfræði. Allir fara hreint í pottinn.</small></div><b>{splitMode==='full'?'✓':''}</b></button>
       </div>
-      {splitMode==='weighted' && <div className="weight-note">📈 Styrkleikamat notar stig/sett, settsigra og mörk + stoðsendingar á {analytics?.season.name}. Nýir leikmenn byrja á hlutlausu vægi.</div>}
+      {splitMode==='weighted' && <div className="weight-note">📈 Styrkleikamat notar stig/sett, settsigra og mörk + stoðsendingar á {(analytics?.season.name ?? ratingSnapshot?.season.name ?? '')}. Nýir leikmenn byrja á hlutlausu vægi.</div>}
       <div className="sticky-action"><button className="primary jumbo split-button" onClick={()=>void split()}>⤨ SKIPTA Í LIÐ</button><small>Þú sérð dráttinn eiga sér stað áður en liðin birtast.</small></div>
     </> : <>
       <div className="split-toolbar"><button disabled={shuffling} onClick={()=>{setStage('roster')}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>

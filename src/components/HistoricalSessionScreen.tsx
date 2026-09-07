@@ -7,9 +7,9 @@ import { todayIso } from '../utils/id'
 import { SeasonContext, displayDate } from './SeasonContext'
 
 const TEAMS = [
-  { code: 'A' as const, name: 'Rautt', color: '#ef4444' },
-  { code: 'B' as const, name: 'Blátt', color: '#3b82f6' },
-  { code: 'C' as const, name: 'Gult', color: '#eab308' },
+  { code: 'A' as const, name: 'Blátt', color: '#3b82f6' },
+  { code: 'B' as const, name: 'Grænt', color: '#22c55e' },
+  { code: 'C' as const, name: 'Mislit', color: '#a855f7' },
 ]
 
 export function HistoricalSessionScreen({ onSaved, onCancel }: { onSaved: (sessionId: string) => void; onCancel: () => void }) {

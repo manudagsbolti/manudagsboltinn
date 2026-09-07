@@ -212,10 +212,10 @@ function assignmentImbalance(assignments: Record<UUID, number>, teamCount: numbe
   return Math.max(...means) - Math.min(...means)
 }
 
-function applyRatings(rows: SeasonPlayerAnalytics[]) {
+export function applyRatings(rows: Pick<SeasonPlayerAnalytics, 'setsPlayed' | 'pointsPerSet' | 'contributions' | 'setWinRate' | 'rating'>[]) {
   const experienced = rows.filter(r => r.setsPlayed > 0)
   if (!experienced.length) return
-  const metrics: Array<(r: SeasonPlayerAnalytics) => number> = [r => r.pointsPerSet, r => r.contributions / Math.max(1,r.setsPlayed), r => r.setWinRate]
+  const metrics: Array<(r: typeof rows[number]) => number> = [r => r.pointsPerSet, r => r.contributions / Math.max(1,r.setsPlayed), r => r.setWinRate]
   const stats = metrics.map(fn => ({ mean: mean(experienced.map(fn)), sd: stdev(experienced.map(fn)) || 1 }))
   for (const row of rows) {
     if (!row.setsPlayed) { row.rating = 100; continue }

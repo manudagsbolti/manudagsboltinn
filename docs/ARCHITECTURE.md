@@ -77,3 +77,5 @@ hafnar innspýtingu sögu við insert með því að setja hana null. Þetta er 
 leiðréttinga appsins, ekki óbreytanleg öryggisúttekt á aðgerðum gagnagrunnsstjóra.
 
 V1 gerir ráð fyrir einum live recorder í einu. Multi-device collaborative live scoring er ekki hluti V1.
+
+Recorder ratings: migration 013 derives per-season/player points, sets, wins and contributions from approved completed raw nights, including aggregate backfills. The shared TypeScript rating formula computes the same ALL-role strength as admin. Dexie v7 ratingCache is disposable, excluded from raw sync/backup, cleared on account switches, and selected by night date. Invalid/failed downloads preserve the previous cache. No network request occurs in the draw/live loop.

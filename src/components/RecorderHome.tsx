@@ -38,7 +38,7 @@ export function RecorderHome({ access, go, signOut }: { access: AppAccess; go: (
     <aside className="card recorder-connection" aria-labelledby="connection-heading">
       <header><h2 id="connection-heading">Tenging og sendingar</h2><span className={`recorder-network ${online ? 'is-online' : ''}`}>{online ? 'Nettenging' : 'Án nets'}</span></header>
       <p role="status">{queued ? `${queued} kvöld bíða sendingar og sendast sjálfkrafa þegar samband næst.` : 'Engin kvöld bíða sendingar.'}</p>
-      <p className="recorder-help">„Athuga tengingu“ sækir nýja leikmenn, athugar stöðu innsendinga og reynir að senda kvöld sem bíða. Til að senda lokið kvöld í fyrsta sinn velurðu „Senda til yfirferðar“ við kvöldið.</p>
+      <p className="recorder-help">„Athuga tengingu“ sækir leikmenn og styrkleikamat fyrir vigtaðan drátt, athugar stöðu innsendinga og reynir að senda kvöld sem bíða. Styrkleikamatið helst á tækinu án nets. Til að senda lokið kvöld í fyrsta sinn velurðu „Senda til yfirferðar“ við kvöldið.</p>
       <button className="recorder-button" disabled={busy || !online} onClick={() => { void sync() }}>{busy ? 'Athuga samband…' : 'Athuga tengingu'}</button>
       {message && <p role="status">{message}</p>}
     </aside>

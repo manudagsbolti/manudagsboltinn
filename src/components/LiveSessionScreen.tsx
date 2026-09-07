@@ -83,6 +83,11 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
   const setStats = buildSetTeamStats(currentSet, setTeams, setGames, session)
   const summary = buildSessionSummary(data)
   const nightTeams = summary.teams
+  const setWins = Object.fromEntries(setTeams.map(team => {
+    const ids = data.memberships.filter(m => m.teamId === team.id).map(m => m.playerId).sort()
+    const key = JSON.stringify([team.sortOrder, ids])
+    return [team.id, nightTeams.find(t => t.key === key)?.sets ?? 0]
+  }))
 
   const saveGoal = async (scorerId: string, assistId: string | null, eventType: 'GOAL' | 'OWN_GOAL') => {
     if (!goalTeam) return
@@ -143,7 +148,7 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
     <header className="live-topbar"><button onClick={onBack}>⌄</button><div><span>MÁNUDAGSBOLTINN</span><strong>{new Date(`${session.playedOn}T12:00:00`).toLocaleDateString('is-IS', { day:'numeric', month:'short' })}</strong></div><div className="live-set-pill">SETT {currentSet.setNo}</div></header>
     {error && <p className="warning-banner" role="alert">{error}</p>}
     {previousSet?.status === 'completed' && currentGame.gameNo === 1 && currentGame.status === 'ready' && <p className="set-win-notice">🏆 {data.teams.find(t => t.id === previousSet.winningTeamId)?.name} vann sett {previousSet.setNo}. Nýtt sett er tilbúið.</p>}
-    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet}/>
+    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet} setWins={setWins}/>
 
     {currentSet.status !== 'completed' ? <main className="match-stage">
       <div className="game-label">LEIKUR {currentGame.gameNo}</div>
@@ -177,8 +182,9 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
       <button disabled={busy} onClick={() => void run(finish)}>Klára kvöldið</button>
     </div>
     <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
-    <section className="live-session-stats"><h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
+    <section className="live-session-stats">
     <NightSets data={data}/>
+    <h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
     <h2>Staða allra leikmanna</h2><div className="summary-table-wrap"><table className="summary-table"><thead><tr><th>Leikmaður</th><th>Sett</th><th>Sigrar</th><th>Jafntefli</th><th>Mörk</th><th>Stoðs.</th></tr></thead><tbody>{summary.players.map(p => <tr key={p.playerId}><th scope="row">{p.name}</th><td>{p.setWins}</td><td>{p.smallWins}</td><td>{p.draws}</td><td>{p.goals}</td><td>{p.assists}</td></tr>)}</tbody></table></div></section>
     {goalTeam && <GoalModal
       team={goalTeam} players={membersForGoalTeam} defendingPlayers={defendingPlayers}

@@ -27,7 +27,8 @@ export function GoalModal({ team, players, defendingPlayers, onClose, onSave }: 
       <div className="modal-grabber" />
       <header><div><span className="eyebrow">⚽ MARK · {team.name.toUpperCase()}</span><h2>{scorer ? (ownGoal ? 'Staðfesta sjálfsmark' : 'Stoðsending?') : (ownGoal ? 'Hver gerði sjálfsmark?' : 'Hver skoraði?')}</h2></div><button className="modal-close" onClick={onClose}>×</button></header>
       {!scorer ? <>
-        <button className="text-button" onClick={() => setOwnGoal(!ownGoal)}>{ownGoal ? '← Venjulegt mark' : 'Sjálfsmark'}</button>
+        <button type="button" className="own-goal-toggle" aria-pressed={ownGoal} onClick={() => setOwnGoal(!ownGoal)}><span aria-hidden="true">↩</span> {ownGoal ? 'Sjálfsmark valið · skipta í venjulegt mark' : 'Skrá sjálfsmark'}</button>
+        {ownGoal && <p className="setup-hint">Veldu leikmann andstæðinganna sem gerði sjálfsmarkið. Markið telur fyrir {team.name}; engin stoðsending er skráð.</p>}
         <div className="player-choice-grid">{choices.map(player => <button key={player.id} onClick={() => setScorer(player.id)}><span className="choice-avatar">{player.name[0]}</span><strong>{player.name}</strong></button>)}</div>
       </> : <>
         <div className="scorer-confirm"><span>{ownGoal ? 'Sjálfsmark' : 'Mark'}</span><strong>⚽ {scorerPlayer?.name}</strong><button onClick={() => setScorer(null)}>Breyta</button></div>

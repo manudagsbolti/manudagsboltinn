@@ -52,6 +52,7 @@ export class ManudagsboltinnDb extends Dexie {
   undoActions!: EntityTable<UndoAction, 'id'>
   syncQueue!: EntityTable<SyncQueueItem, 'id'>
   submissions!: EntityTable<LocalSubmission, 'sessionId'>
+  ratingCache!: EntityTable<{ id: string; season: Season; ratings: Record<string, number>; rolePeriods?: PlayerRolePeriod[]; fetchedAt: string }, 'id'>
 
   constructor(name = 'manudagsboltinn') {
     super(name)
@@ -103,6 +104,7 @@ export class ManudagsboltinnDb extends Dexie {
       })
     })
     this.version(6).stores({ submissions: 'sessionId, state' })
+    this.version(7).stores({ ratingCache: 'id' })
   }
 }
 

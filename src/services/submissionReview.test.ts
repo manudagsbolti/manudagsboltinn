@@ -2,13 +2,14 @@
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { db } from '../db/localDb'
-import { addPlayer, createSession, createSet, startGame, recordGoal, completeSession, updateDraftRoster } from '../data/repository'
+import { addPlayer, createSession, createSet, startGame, recordGoal, completeSession, updateDraftRoster, createHistoricalSession } from '../data/repository'
 import { queueSubmission } from './submissions'
 import { flushSyncQueue } from './syncQueue'
 import { syncCloud } from './cloudSync'
 import { fromSnakeCase, toSnakeCase } from './syncData'
 import { signOutSafely } from './access'
 import { buildSeasonAnalytics } from './seasonAnalytics'
+import { cacheRecorderRatings } from './recorderRatings'
 import setupSql from '../../supabase/setup-empty-project.sql?raw'
 
 const mock = vi.hoisted(() => ({ rpc: vi.fn(), getSession: vi.fn() }))
@@ -48,7 +49,7 @@ beforeEach(async () => {
     try {
       const result = name === 'submit_night'
         ? await asUser('select public.submit_night($1,$2,$3::jsonb) result', [args.submission_id, args.receipt_token, JSON.stringify(args.facts)])
-        : await asUser('select public.get_submission_roster() result')
+        : name === 'get_submission_ratings' ? await asUser('select public.get_submission_ratings() result') : await asUser('select public.get_submission_roster() result')
       return { data: result.rows[0].result, error: null }
     } catch (error) { return { data: null, error } }
   })
@@ -120,6 +121,9 @@ it('records without dates opened, queues offline, retries once, and approves ato
   const stats = buildSeasonAnalytics({ players:data.players,sessions:data.sessions,attendance:data.sessionPlayers,sets:data.sets,teams:data.setTeams,memberships:data.setTeamMembers,games:data.games,goals:data.goals }, data.seasons[0])
   expect(stats.totals.nights).toBe(1)
   expect(data.sessionPlayers.find((r:any) => r.playerId === players[0].id).roleAtSession).toBe('REGULAR')
+  const allStats = buildSeasonAnalytics({ players:data.players,sessions:data.sessions,attendance:data.sessionPlayers,sets:data.sets,teams:data.setTeams,memberships:data.setTeamMembers,games:data.games,goals:data.goals }, data.seasons[0], 'ALL')
+  await cacheRecorderRatings((await asUser('select public.get_submission_ratings() result')).rows[0].result)
+  expect((await db.ratingCache.get(seasonId))?.ratings).toEqual(Object.fromEntries(allStats.players.map(p => [p.playerId,p.rating])))
   await syncCloud()
   expect((await db.submissions.get(session.id))?.state).toBe('approved')
   expect(await db.sessions.count()).toBe(1)
@@ -137,6 +141,29 @@ it('hides all other nights/inbox, rejects direct writes and approval, and keeps 
   await flushSyncQueue()
   expect((await db.submissions.get(session.id))?.state).toBe('rejected')
   expect((await pg.query('select * from public.sessions')).rows).toHaveLength(0)
+})
+
+it('derives manual-night ratings matching admin and preserves the cached values offline', async () => {
+  localStorage.setItem('manudagsboltinn-access', JSON.stringify({ userId: admin, role: 'admin' }))
+  const players = []
+  for (const name of ['A','B','C','D']) players.push(await addPlayer(name))
+  await createHistoricalSession({ playedOn:'2026-09-07', teams:[
+    {code:'A',name:'Red',color:'red',playerIds:players.slice(0,2).map(p=>p.id)},
+    {code:'B',name:'Blue',color:'blue',playerIds:players.slice(2).map(p=>p.id)}
+  ], rounds:[{roundNo:1,teamGoals:{A:4,B:3}},{roundNo:2,teamGoals:{A:1,B:4}}], playerGoals:players.map((p,i)=>({playerId:p.id,goals:[5,0,3,4][i]})) })
+  const operations = toSnakeCase(await db.syncQueue.orderBy('createdAt').toArray())
+  await asUser('select public.apply_sync_batch($1::jsonb) result',[JSON.stringify(operations)],admin)
+  const season = (await db.seasons.toArray())[0]
+  const expected = buildSeasonAnalytics({ players, sessions:await db.sessions.toArray(), attendance:await db.sessionPlayers.toArray(), sets:[], teams:[], memberships:[], games:[], goals:[], backfills:await db.sessionBackfills.toArray() },season,'ALL')
+  const result = (await asUser('select public.get_submission_ratings() result')).rows[0].result
+  await cacheRecorderRatings(result)
+  const cached = await db.ratingCache.get(season.id)
+  expect(cached?.ratings).toEqual(Object.fromEntries(expected.players.map(p=>[p.playerId,p.rating])))
+  expect(cached?.rolePeriods).toEqual(await db.rolePeriods.toArray())
+  expect(new Set(Object.values(cached!.ratings)).size).toBeGreaterThan(1)
+  await expect(cacheRecorderRatings({broken:true})).rejects.toThrow()
+  expect(await db.ratingCache.get(season.id)).toEqual(cached)
+  await expect(asUser('select public.get_submission_ratings()',[],crypto.randomUUID())).rejects.toThrow('Access denied')
 })
 
 it('rolls back malformed approval and out-of-season dates without touching existing facts', async () => {

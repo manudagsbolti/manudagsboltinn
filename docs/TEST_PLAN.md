@@ -90,3 +90,7 @@ Cloudflare secrets and does not deploy the app.
 - cloud snapshot + normalized rows exist
 
 - Before the first set, go back from team assignment to the roster, edit attendance, cancel and verify no attendance changes. Save a replacement player and verify the same session/date, retained role snapshots, fresh draw and synced composite-key deletion. Reject edits after a set exists and reject recorder access to the cloud delete.
+
+- Compare recorder RPC rating inputs with admin ALL-role analytics for approved live and manual nights. Deny unauthorized access. Confirm cached ratings survive invalid downloads and recorders can draw offline using the season containing the night date.
+
+- In admin and shared attendance selection, choose a substitute, select all regulars, then deselect all regulars: the substitute remains selected. Check date-bound roles, missing cache, and review season auto-selection/no-season placeholder.

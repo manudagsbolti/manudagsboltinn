@@ -32,9 +32,13 @@ export function SessionSummaryScreen({ sessionId, onBack, recorder = false }: { 
       <h1>{new Date(`${data.session.playedOn}T12:00:00`).toLocaleDateString('is-IS', { weekday:'long', day:'numeric', month:'long' })}</h1>
       <p>{summary.players.length} leikmenn · {summary.miniGames ?? '—'} leikir · {summary.completedSets} sett · {summary.draws ?? '—'} jafntefli · {summary.goals} mörk</p>
       <p>Gögn vistuð á þessu tæki.</p>
+      {!!summary.ownGoals && <p className="own-goal-note">Þar af {summary.ownGoals} {summary.ownGoals === 1 ? 'sjálfsmark' : 'sjálfsmörk'}. Telja í markatölu liðsins sem fékk markið, en ekki sem skoruð mörk leikmannsins.</p>}
       {summary.unfinishedGame && <p className="data-quality-note">Ólokinn leikur er varðveittur en telst ekki með. Óunnið sett fær engan settsigur.</p>}
       {data.backfill && <p className="data-quality-note">Jafntefli, stoðsendingar, sjálfsmörk og nákvæm leikjaröð voru ekki skráð. — merkir óskráð, ekki núll.</p>}
     </header>
+    <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
+    {recorder && <SubmitNight sessionId={sessionId}/>}
+    <NightSets data={data}/>
     <section aria-labelledby="summary-teams"><h2 id="summary-teams">Lið kvöldsins</h2>
       <NightTeams teams={summary.teams}/>
     </section>
@@ -47,9 +51,6 @@ export function SessionSummaryScreen({ sessionId, onBack, recorder = false }: { 
       </div>
       {!summary.miniGames && !data.backfill && <p>Engir leikir kláruðust. Allir valdir leikmenn eru sýndir.</p>}
     </section>
-    <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
-    <NightSets data={data}/>
-    {recorder && <SubmitNight sessionId={sessionId}/>}
     <button className="primary jumbo summary-home" onClick={onBack}>Til baka á heim</button>
   </section>
 }
