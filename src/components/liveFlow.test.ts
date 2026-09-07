@@ -8,6 +8,7 @@ import { DEFAULT_RULES } from '../domain/rules'
 import { playBuzzer } from '../lib/sound'
 import { LiveSessionScreen } from './LiveSessionScreen'
 import { SessionSummaryScreen } from './SessionSummaryScreen'
+import { TeamSetupScreen } from './TeamSetupScreen'
 
 vi.mock('../lib/sound', () => ({ playBuzzer: vi.fn(async () => {}), unlockAudio: vi.fn(async () => {}) }))
 vi.mock('../lib/wakelock', () => ({ requestWakeLock: vi.fn(async () => {}), releaseWakeLock: vi.fn(async () => {}) }))
@@ -22,6 +23,26 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 const button = (text: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.includes(text))!
 async function click(text: string) { await act(async () => { button(text).click() }) }
+it('edits the selected group in place and can cancel without leaving setup', async () => {
+  const players = []
+  for (const name of ['Anna', 'Ari', 'Bára', 'Bjarni', 'Cecilia']) players.push(await addPlayer(name))
+  const session = await createSession({ playedOn: '2026-09-07', playerIds: players.slice(0,4).map(p => p.id), ...DEFAULT_RULES })
+  const onCancel = vi.fn()
+  await act(async () => root.render(createElement(TeamSetupScreen, { sessionId: session.id, onReady: vi.fn(), onCancel })))
+  await waitFor(() => expect(button('Breyta hópnum')).toBeDefined())
+  await click('Breyta hópnum')
+  await waitFor(() => expect(button('Cecilia')).toBeDefined())
+  await click('Anna'); await click('Cecilia')
+  await click('Hætta við breytingar')
+  expect((await db.sessionPlayers.toArray()).map(p => p.playerId)).toContain(players[0].id)
+  await click('Breyta hópnum')
+  await waitFor(() => expect(button('Cecilia')).toBeDefined())
+  await click('Anna'); await click('Cecilia'); await click('Áfram')
+  await waitFor(() => expect(host.querySelector('.roster-list')?.textContent).toContain('Cecilia'))
+  expect(host.querySelector('.roster-list')?.textContent).not.toContain('Anna')
+  expect(await db.sessions.toArray()).toEqual([session])
+  expect(onCancel).not.toHaveBeenCalled()
+})
 async function waitFor(check: () => void) {
   for (let attempt = 0; attempt < 40; attempt++) {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
@@ -72,6 +93,31 @@ it('cancelling finish preserves the live session with a paused timer', async () 
   expect((await db.sessions.get(session.id))?.status).toBe('live')
   expect((await db.games.toArray())[0].status).toBe('paused')
   expect(onFinish).not.toHaveBeenCalled()
+})
+
+it('requires two-step deletion, preserves a cancelled live night, and keeps the roster', async () => {
+  const { session } = await mount()
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Eyða kvöldi')
+  await waitFor(() => expect(host.querySelector('.delete-night-dialog')).not.toBeNull())
+  expect((await db.games.toArray())[0].status).toBe('paused')
+  expect(button('Staðfesta eyðingu').disabled).toBe(true)
+  await click('Hætta við')
+  expect(await db.sessions.get(session.id)).toBeDefined()
+  expect(await db.games.count()).toBe(1)
+  await click('Eyða kvöldi')
+  await waitFor(() => expect(host.querySelector('.delete-night-dialog input')).not.toBeNull())
+  await act(async () => {
+    const input = host.querySelector<HTMLInputElement>('.delete-night-dialog input')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'EYÐA')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click('Staðfesta eyðingu')
+  await waitFor(() => expect(host.querySelector('.delete-night-dialog')).toBeNull())
+  expect(await db.sessions.get(session.id)).toBeUndefined()
+  expect(await db.games.count()).toBe(0)
+  expect(await db.players.count()).toBe(4)
 })
 
 it('buzzes on first timeout, asks for outgoing team, then prepares READY without a win', async () => {

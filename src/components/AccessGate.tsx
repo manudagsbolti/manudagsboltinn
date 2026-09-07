@@ -1,3 +1,4 @@
+import { ClubWelcome } from './ClubBrand'
 import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadAccess, RECORDER_EMAIL, signOutSafely, type AppAccess } from '../services/access'
@@ -44,7 +45,7 @@ export function AccessGate({ children }: { children: (access: AppAccess, signOut
   if (access) return <>{error && <p role="alert" className="warning-banner">{error}</p>}{children(access, () => { void logout() })}</>
   return <main className="screen page-screen access-screen">
     <form className="card auth-card" onSubmit={e => { e.preventDefault(); void login() }}>
-      <span className="eyebrow">MÁNUDAGSBOLTINN</span><h1>{admin ? 'Stjórnandi' : 'Skrá boltakvöld'}</h1>
+      <ClubWelcome/><span className="eyebrow">MÁNUDAGSBOLTINN</span><h1>{admin ? 'Stjórnandi' : 'Skrá boltakvöld'}</h1>
       <p>{admin ? 'Notaðu þinn stjórnandaaðgang.' : 'Sláðu inn sameiginlega lykilorðið til að skrá kvöldið.'}</p>
       {admin && <label className="field">Netfang<input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required /></label>}
       <label className="field">Lykilorð<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required /></label>

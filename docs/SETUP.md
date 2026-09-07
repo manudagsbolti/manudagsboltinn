@@ -16,7 +16,7 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 ### Nýr, tómur grunnur
 
 1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
-2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–011 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–012 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
 3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
 4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 
@@ -151,3 +151,7 @@ Supabase Free er nóg fyrir umfangið, en backup policy þarf að vera meðvitu�
 - færa project á plan með viðeigandi managed backups.
 
 Offline gögn í einum síma eru ekki backup-strategía.
+
+### Draft roster editing (012)
+
+Existing projects on 011: run `supabase/migrations/012_draft_roster.sql` before deploying the roster editor. It enables admin attendance removals before the first set through atomic sync. Shared recorder edits remain local until submission. Do not rerun the empty-project setup.

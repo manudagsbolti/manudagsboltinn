@@ -1,3 +1,5 @@
+import { DeleteNight } from './DeleteNight'
+import { NewSessionScreen } from './NewSessionScreen'
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
@@ -37,6 +39,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
   const [stage, setStage] = useState<'roster'|'teams'>('roster')
   const [shuffling, setShuffling] = useState(false)
   const [seededCount, setSeededCount] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const players = useMemo(() => [...(data?.players ?? [])].sort((a,b)=>a.name.localeCompare(b.name,'is')), [data])
   useEffect(() => {
@@ -73,14 +76,18 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
   }
 
   if (!data) return <section className="screen loading-screen">Hleð hópnum…</section>
+  const canEdit = data.session.status === 'draft' && data.setNo === 1
+  if (editing && canEdit) return <NewSessionScreen recorder={recorder} edit={{ sessionId, playerIds: players.map(p => p.id), playedOn: data.session.playedOn, seasonId: data.session.seasonId ?? null }} onCancel={() => setEditing(false)} onCreated={() => { setEditing(false); setAssignments({}); setStage('roster'); setSeededCount(false) }}/>
 
   return <section className="screen page-screen wizard-screen">
-    <button className="back-button" onClick={onCancel}>← Til baka</button>
+    <DeleteNight sessionId={sessionId} onDeleted={onCancel}/>
+    <button className="back-button" disabled={shuffling} onClick={() => stage === 'teams' ? setStage('roster') : canEdit ? setEditing(true) : onCancel()}>← {stage === 'teams' ? 'Til baka í hópinn' : canEdit ? 'Breyta hópnum' : 'Á forsíðu'}</button>
     <div className="section-heading"><div><span className="eyebrow">SETT {data.setNo} · {analytics?.season.name}</span><h1>{stage === 'roster' ? 'Hópurinn í kvöld' : 'Liðin eru klár'}</h1></div>{stage==='teams' && !shuffling && <span className={`balance-badge ${balance>=90?'great':''}`}>⚖ {splitMode==='weighted'?`${balance}% jafnvægi`:'Full random'}</span>}</div>
 
     {stage === 'roster' ? <>
       <article className="roster-card card">
         <header><div><strong>{players.length} leikmenn valdir</strong><small>Staðfestu hópinn áður en dregið er í lið.</small></div><span>✓</span></header>
+        {canEdit && <button className="recorder-button" onClick={() => setEditing(true)}>Bæta við / taka úr hópnum</button>}
         <div className="roster-list">{players.map(player => <div key={player.id} className="roster-player"><span className="choice-avatar">{player.name[0]}</span><div><strong>{player.name}</strong>{player.nickname && <small>{player.nickname}</small>}</div>{splitMode==='weighted' && <em>{ratings.has(player.id) ? `R ${ratings.get(player.id)}` : 'Nýr'}</em>}</div>)}</div>
       </article>
 
@@ -93,7 +100,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       {splitMode==='weighted' && <div className="weight-note">📈 Styrkleikamat notar stig/sett, settsigra og mörk + stoðsendingar á {analytics?.season.name}. Nýir leikmenn byrja á hlutlausu vægi.</div>}
       <div className="sticky-action"><button className="primary jumbo split-button" onClick={()=>void split()}>⤨ SKIPTA Í LIÐ</button><small>Þú sérð dráttinn eiga sér stað áður en liðin birtast.</small></div>
     </> : <>
-      <div className="split-toolbar"><button onClick={()=>{setStage('roster');setAssignments({})}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>
+      <div className="split-toolbar"><button disabled={shuffling} onClick={()=>{setStage('roster')}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>
       {shuffling ? <div className="shuffle-stage card"><div className="shuffle-orb">⤨</div><h2>Drögum í lið…</h2><div className="shuffle-names">{players.slice(0,6).map((p,i)=><span key={p.id} style={{animationDelay:`${i*70}ms`}}>{p.name}</span>)}</div></div> : <>
         <p className="setup-hint">Liðin eru tillaga. Þú getur fært leikmann handvirkt með litapunktunum áður en settið hefst.</p>
         <div className={`team-setup-grid cols-${teamCount}`}>

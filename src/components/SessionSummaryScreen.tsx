@@ -1,3 +1,4 @@
+import { DeleteNight } from './DeleteNight'
 import { NightTeams } from './NightTeams'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
@@ -46,6 +47,7 @@ export function SessionSummaryScreen({ sessionId, onBack, recorder = false }: { 
       </div>
       {!summary.miniGames && !data.backfill && <p>Engir leikir kláruðust. Allir valdir leikmenn eru sýndir.</p>}
     </section>
+    <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
     <NightSets data={data}/>
     {recorder && <SubmitNight sessionId={sessionId}/>}
     <button className="primary jumbo summary-home" onClick={onBack}>Til baka á heim</button>
