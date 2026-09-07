@@ -16,5 +16,16 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src/main.tsx", "src/vite-env.d.ts", "src/**/*.test.ts"],
+  "exclude": [
+    "src/screens",
+    "src/context",
+    "src/domain/gameEngine.ts",
+    "src/domain/stats.ts",
+    "src/domain/roles.ts",
+    "src/lib/cloud.ts",
+    "src/lib/gameEngine.ts",
+    "src/lib/storage.ts",
+    "src/components/MatchBoard.tsx"
+  ]
 }

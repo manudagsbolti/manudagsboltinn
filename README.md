@@ -1,31 +1,120 @@
-# Mánudagsboltinn
+# Mánudagsboltinn — V1.1
 
-Offline-first PWA fyrir live skráningu og tölfræði Mánudagsboltans.
+V1 rules and current implementation status: [Product specification](docs/PRODUCT_SPEC.md), [architecture](docs/ARCHITECTURE.md), [audit and remaining acceptance checks](docs/V1_AUDIT.md). The older feature notes below include superseded scoring/season assumptions; the product specification is authoritative.
 
-## V1 inniheldur
+Offline-first PWA fyrir Mánudagsboltann. Þetta build er ætlað sem raunverulegur nothæfur grunnur fyrir leikdag, tímabilstölfræði og kynningu.
 
-- 2 eða 3 lið, með frjálsri liðastærð (4v4, 4v4v4, 4v4v5, 5v5v5 o.s.frv.)
-- 3:00 countdown timer, hljóð, pause/resume og handvirkt start á næsta leik
-- King-of-the-court rotation fyrir 3 lið og rétt 2-liða hegðun
-- Fyrst í 4 sigra vinnur sett
-- Mark, markaskorari, stoðsending og sjálfsmark
-- Fastamaður / varamaður snapshot á hverju boltakvöldi
-- Staða kvöldsins: sigrar, sett, choke, nix og leikmannatölfræði
-- Lokasamantekt leikmanna
-- Önn: fastamannakeppni, varamannatafla, allir leikmenn og pör
-- IndexedDB local-first geymsla og recovery eftir refresh/crash
-- Supabase sync sem er valfrjálst meðan á leik stendur
-- PWA install, service worker og Wake Lock
-- Cloudflare Workers Static Assets deploy
+## Leikdagur
 
-## Local development
+- Leikmannalisti: bæta við, breyta og gera óvirka.
+- Nýr leikdagur: velja mætingu og reglur kvöldsins.
+- Sérstakt staðfestingarskref sýnir allan valinn hóp áður en dregið er í lið.
+- 2 eða 3 lið.
+- **Weighted random**: jafnar lið út frá tölfræði tímabilsins.
+- **Full random**: hreinn slembidráttur án tölfræði.
+- Sýnilegt shuffle/liðadráttarskref og hægt að draga aftur.
+- Handvirk færsla milli liða eftir drátt.
+- Sett eru sjálfstæð: sömu lið eða ný lið í næsta sett.
+- 3 mín leikjaklukka (stillanleg), pause/resume og timer persistence.
+- King-of-the-court rotation: markalið helst inni; við timeout fer holder út.
+- Markaskorari + valfrjáls stoðsending skráð á hvert mark.
+- Undo/leiðrétting á síðasta marki áður en næsti leikur byrjar.
+- 4 litlir sigrar = 1 stig (stillanlegt), 4 stig vinna sett (stillanlegt).
 
-```bash
+## Tölfræði og verðlaun
+
+Tölfræðin er reiknuð frá raw leikjagögnum, ekki handvirkum teljurum.
+
+- Stig, litlir sigrar og settsigrar.
+- Mörk, stoðsendingar og G+A.
+- Stig/kvöld, stig/sett, settsigur% og framlag/kvöld.
+- Bestu einstöku kvöld: stig, mörk og stoðsendingar.
+- 😵 Choke: 3 stig í kláruðu setti en tap.
+- 🥚 0-sett: 0 stig í kláruðu setti.
+- ☠ Nix: 0 stig allt kvöldið.
+- Tímabilsval, tafla, met og verðlaun.
+- Weighted-random rating með sample-size shrinkage fyrir nýja/lítið spilaða leikmenn.
+
+### Verðlaun sem eru undirbúin
+
+- Stigakóngurinn
+- Settameistarinn
+- Markakóngurinn
+- Stoðsendingakóngurinn
+- Framlag ársins
+- Styrkleikakóngurinn
+- Járnmaðurinn
+- Skilvirkastur
+- Kvöldsprengjan
+- Markasprengjan
+- Choke-meistarinn
+- Núllkóngurinn
+- Nixarinn
+
+## Kynningarhamur
+
+Í Tölfræði er `▶ Kynning` fyrir valið tímabil. Hann er hannaður fyrir sjónvarp/skjávarpa:
+
+- Season intro
+- Heildartafla
+- Verðlaunasíður
+- Skammarveggur
+- Full-screen takki
+- Örvatakkar / space til að fletta
+
+## Backup / restore
+
+`↓ Backup` er aðgengilegt beint á forsíðu og einnig undir Sync.
+
+Export býr til eina JSON-skrá með öllum raw gögnum:
+
+- players
+- seasons
+- sessions + attendance
+- sets + teams + memberships
+- games
+- goals + assists
+
+`Restore backup` getur endurheimt sömu gögn og setur þau aftur í sync queue. Þetta er ætlað sem öryggisnet fyrir updates.
+
+## Offline / cloud
+
+- Dexie / IndexedDB er primary local store.
+- Allar mutations fara í sync queue.
+- Supabase auth + pull/push þegar credentials eru sett.
+- Appið virkar áfram án nets.
+- PWA manifest og Cloudflare-ready Vite build.
+
+## Keyra locally
+
+```powershell
 npm install
-copy .env.example .env.local   # Windows CMD; PowerShell: Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Ef Supabase breyturnar eru ekki settar virkar appið local-only.
+Opnaðu slóðina sem Vite sýnir, yfirleitt `http://localhost:5173`.
 
-Sjá `docs/SETUP.md` fyrir production uppsetningu.
+## Prófanir og production build
+
+```powershell
+npm test
+npm run build
+```
+
+## Supabase — án CLI
+
+Í Supabase Dashboard → SQL Editor, keyrðu migrations í röð:
+
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_timer_persistence.sql`
+3. `supabase/migrations/003_season_analytics.sql`
+
+`003` býr til season analytics views og bakfyllir eldri sessions á rétt Aug–Jul tímabil eftir dagsetningu.
+
+Búðu síðan til `.env.local` út frá `.env.example`.
+
+## Cloudflare
+
+Production output er `dist/`. Build command er `npm run build`.
+
+Sjá `SETUP-WINDOWS.md` fyrir næstu skref.
