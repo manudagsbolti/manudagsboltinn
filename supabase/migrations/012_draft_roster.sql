@@ -42,7 +42,7 @@ begin
             and not exists(select 1 from public.sets st where st.session_id = s.id)) then
           raise exception 'Attendance can only be removed before the first set';
         end if;
-        delete from public.session_player8s
+        delete from public.session_players
           where session_id = split_part(item->>'entity_id', ':', 1)::uuid
             and player_id = split_part(item->>'entity_id', ':', 2)::uuid;
       else
@@ -77,4 +77,3 @@ begin
   perform public.refresh_accessible_snapshots();
   return applied;
 end $$;
-
