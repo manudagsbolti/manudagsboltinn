@@ -73,11 +73,14 @@ facts and role snapshots; moving a night changes which season includes it.
 Player management displays both role names separately from explicit role-change
 actions, confirms the effective date, and distinguishes active/inactive roster
 visibility from REGULAR/SUBSTITUTE status. Viewing players does not create seasons.
-Administrators may delete one draft/completed night after seeing its date and
-season and typing EYÐA. Delete its attendance, backfill, teams, games, events,
+Administrators may delete one night from its open screen after seeing its date
+and typing EYÐA. Pause running games before opening confirmation; cancelling
+preserves the night and leaves the timer paused for explicit resume.
+Delete its attendance, backfill, teams, games, events,
 role-correction history and Undo; preserve all players, seasons and other nights.
 Queue the cloud delete offline and execute it atomically with retry receipts.
-Shared recorders cannot delete a night. Live nights must be finished first.
+Shared recorders may discard their own unsent local nights through the same
+confirmation. Queued/submitted nights remain protected; cloud deletion is admin-only.
 Existing August–July records remain attached to their original season IDs.
 
 ### 4.1 Create session
@@ -527,3 +530,7 @@ Do not delay the reliable live recorder for these features:
 - AI-generated awards/insights
 
 The architecture should make later analytics possible, but V1 priority is a robust live football recorder and correct historical data.
+
+### Draft attendance editing
+
+Before creating the first set, the operator may return from team assignment to the group and edit attendance in the existing draft night. Preserve its ID, date, season and retained player role snapshots. Added players snapshot their role on the night date. Saving resets the proposed draw; cancelling preserves the saved group. Once a set exists, this draft editor is unavailable.

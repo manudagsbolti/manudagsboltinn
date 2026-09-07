@@ -1,3 +1,4 @@
+import { DeleteNight } from './DeleteNight'
 import { NightTeams } from './NightTeams'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -175,6 +176,7 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
       <button disabled={busy || !undoAvailable} onClick={() => void run(() => undoLastScoringAction(sessionId))}>↶ Afturkalla síðasta leik</button>
       <button disabled={busy} onClick={() => void run(finish)}>Klára kvöldið</button>
     </div>
+    <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
     <section className="live-session-stats"><h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
     <NightSets data={data}/>
     <h2>Staða allra leikmanna</h2><div className="summary-table-wrap"><table className="summary-table"><thead><tr><th>Leikmaður</th><th>Sett</th><th>Sigrar</th><th>Jafntefli</th><th>Mörk</th><th>Stoðs.</th></tr></thead><tbody>{summary.players.map(p => <tr key={p.playerId}><th scope="row">{p.name}</th><td>{p.setWins}</td><td>{p.smallWins}</td><td>{p.draws}</td><td>{p.goals}</td><td>{p.assists}</td></tr>)}</tbody></table></div></section>

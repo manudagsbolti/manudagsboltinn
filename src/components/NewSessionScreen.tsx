@@ -1,19 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
-import { addPlayer, createSession, roleOnDate } from '../data/repository'
+import { addPlayer, createSession, roleOnDate, updateDraftRoster } from '../data/repository'
 import { DEFAULT_RULES } from '../domain/rules'
 import { todayIso } from '../utils/id'
 import { defaultSeasonForDate } from '../domain/seasons'
 import { SeasonContext } from './SeasonContext'
 
-export function NewSessionScreen({ onCreated, onCancel, recordingDate, recordingSeasonId, recorder = false }: { onCreated: (id: string) => void; onCancel: () => void; recordingDate?: string; recordingSeasonId?: string; recorder?: boolean }) {
-  const players = useLiveQuery(() => db.players.toArray().then(rows => rows.filter(p => p.isActive)), []) ?? []
+export function NewSessionScreen({ onCreated, onCancel, recordingDate, recordingSeasonId, recorder = false, edit }: { onCreated: (id: string) => void; onCancel: () => void; recordingDate?: string; recordingSeasonId?: string; recorder?: boolean; edit?: { sessionId: string; playerIds: string[]; playedOn: string; seasonId: string | null } }) {
+  const players = useLiveQuery(() => db.players.toArray().then(rows => rows.filter(p => p.isActive || edit?.playerIds.includes(p.id))), [edit?.sessionId]) ?? []
   const rolePeriods = useLiveQuery(() => db.rolePeriods.toArray(), []) ?? []
   const seasons = useLiveQuery(() => db.seasons.toArray(), []) ?? []
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [date, setDate] = useState(recordingDate ?? todayIso())
-  const [seasonId, setSeasonId] = useState(recordingSeasonId ?? '')
+  const [selected, setSelected] = useState<Set<string>>(new Set(edit?.playerIds ?? []))
+  const [date, setDate] = useState(edit?.playedOn ?? recordingDate ?? todayIso())
+  const [seasonId, setSeasonId] = useState(edit?.seasonId ?? recordingSeasonId ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [quickName, setQuickName] = useState('')
@@ -35,6 +35,7 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
     if (selectedCount < 4 || busy) return
     setBusy(true); setError('')
     try {
+    if (edit) { await updateDraftRoster(edit.sessionId, [...selected]); onCreated(edit.sessionId); return }
     if (recordingDate && !persistedSeason) throw new Error('Sæktu kvöldið á forsíðunni áður en mæting er valin.')
     const session = await createSession({ seasonId: persistedSeason?.id, playedOn: date, playerIds: [...selected], gameDurationSeconds: DEFAULT_RULES.gameDurationSeconds, winsPerPoint: DEFAULT_RULES.winsPerPoint, pointsToWinSet: DEFAULT_RULES.pointsToWinSet })
     onCreated(session.id)
@@ -42,9 +43,9 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
   }
 
   return <section className="screen page-screen wizard-screen">
-    <button className="back-button" onClick={onCancel}>← Til baka</button>
-    <div className="section-heading"><div><span className="eyebrow">NÝR LEIKDAGUR</span><h1>Hverjir mæta?</h1></div><span className="count-badge accent">{selectedCount} valdir</span></div>
-    {recorder ? <><label className="field">Dagsetning kvöldsins<input required type="date" value={date} onChange={e => setDate(e.target.value)} /></label><p>Stjórnandi velur önn og staðfestir fastamanns-/varamannsstöður við yfirferð.</p></> : recordingDate ? <p>Dagsetning: {recordingDate}</p> : <>
+    <button className="back-button" disabled={busy} onClick={onCancel}>← {edit ? 'Hætta við breytingar' : 'Til baka'}</button>
+    <div className="section-heading"><div><span className="eyebrow">{edit ? 'BREYTA HÓPNUM' : 'NÝR LEIKDAGUR'}</span><h1>Hverjir mæta?</h1></div><span className="count-badge accent">{selectedCount} valdir</span></div>
+    {edit ? <p>Bættu við eða taktu leikmenn úr hópnum. Sama kvöld og dagsetning haldast.</p> : recorder ? <><label className="field">Dagsetning kvöldsins<input required type="date" value={date} onChange={e => setDate(e.target.value)} /></label><p>Stjórnandi velur önn og staðfestir fastamanns-/varamannsstöður við yfirferð.</p></> : recordingDate ? <p>Dagsetning: {recordingDate}</p> : <>
       <div className="date-row card"><div><label>Dagsetning</label><small className="season-inline">Tímabil {persistedSeason?.name ?? season?.name ?? 'Sumarfrí'}</small></div><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
       <label className="field">Önn<select value={seasonId} onChange={e => setSeasonId(e.target.value)}><option value="">Sjálfvirkt eftir dagsetningu</option>{seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     </>}

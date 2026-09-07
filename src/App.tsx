@@ -54,7 +54,7 @@ function AppContent({ access, signOut }: { access: AppAccess; signOut: () => voi
 
   return <div className="app-shell">
     <div className="app-content">
-      {route.name === 'home' && (recorder ? <RecorderHome access={access} go={go} signOut={signOut}/> : <HomeScreen onNew={()=>go('new')} onManual={()=>go('manual')} onContinue={id=>go('live',id)} onSetup={id=>go('setup',id)} onSummary={id=>go('summary',id)}/>)}
+      {route.name === 'home' && (recorder ? <RecorderHome access={access} go={go} signOut={signOut}/> : <HomeScreen signOut={signOut} onNew={()=>go('new')} onManual={()=>go('manual')} onContinue={id=>go('live',id)} onSetup={id=>go('setup',id)} onSummary={id=>go('summary',id)}/>)}
       {route.name === 'players' && <PlayersScreen/>}
       {route.name === 'seasons' && <SeasonsScreen onOpen={s => go(s.status === 'completed' ? 'summary' : s.status === 'live' ? 'live' : 'setup', s.id)} />}
       {route.name === 'stats' && <StatsScreen onPresent={year=>go('presentation',String(year))}/>}

@@ -81,9 +81,12 @@ Cloudflare secrets and does not deploy the app.
 
 ## Offline
 - Delete a completed test night with pending edits; retry a lost cloud response and download again. The night, children and recovery snapshot stay deleted; players, season and another manual night survive. Delete the manual night and verify its backfill/attendance disappear too. Deny shared-recorder deletion via both RPC and direct SQL.
+- From an open live night, choose Delete: timer pauses, confirmation shows the date, and cancellation preserves the facts. Only typing EYÐA and confirming deletes the night. Shared recorders can discard unsent local nights but not queued/submitted ones.
 - start session online
 - disable network
 - record at least 10 mini-games
 - close/reopen PWA and recover
 - reconnect and sync
 - cloud snapshot + normalized rows exist
+
+- Before the first set, go back from team assignment to the roster, edit attendance, cancel and verify no attendance changes. Save a replacement player and verify the same session/date, retained role snapshots, fresh draw and synced composite-key deletion. Reject edits after a set exists and reject recorder access to the cloud delete.

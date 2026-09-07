@@ -172,3 +172,23 @@ h1,h2,h3{color:var(--text)}
 .night-team-roster li{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line);text-align:left}
 .night-team-roster strong{white-space:nowrap;font-variant-numeric:tabular-nums}
 .roster-goal-label{font-size:12px;font-weight:400;color:var(--muted)}
+
+/* Club artwork: contained crest and a quiet shirt-photo welcome. */
+.club-crest{display:block;width:76px;height:82px;object-fit:contain;flex-shrink:0;background:#fff;border-radius:14px;padding:5px;border:1px solid var(--line)}
+.recorder-brand{display:flex;align-items:center;gap:16px;margin-bottom:16px}.recorder-brand h1{margin:5px 0;font-size:clamp(23px,6vw,32px)}
+.club-welcome{position:relative;overflow:hidden;border-radius:14px;background:#17213b;isolation:isolate;height:164px;margin-bottom:24px}
+.club-welcome img{width:100%;height:100%;object-fit:cover;object-position:center 48%;display:block}
+.club-welcome::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,18,35,.94),rgba(10,18,35,.62) 48%,transparent);z-index:1}
+.auth-card .club-welcome p{position:absolute;z-index:2;left:18px;bottom:14px;margin:0;color:#fff;font-size:17px;font-weight:750;line-height:1.35;max-width:65%;text-align:left}
+@media(max-width:380px){.hero-header .club-crest{width:58px;height:64px}.hero-header>div{gap:10px}.club-welcome{height:138px}}
+.hero-header h1.club-motto{font-size:clamp(20px,4.8vw,32px);line-height:1.18;letter-spacing:-.025em}.hero-header:has(.club-motto){flex-wrap:wrap;gap:14px}.hero-header:has(.club-motto)>div:first-child{min-width:0}
+
+/* Recorder landing page */
+.recorder-screen{max-width:720px;margin:auto}.recorder-intro{color:var(--muted);line-height:1.65;margin:0 0 24px;max-width:52ch}
+.recorder-new{width:100%;display:flex;align-items:center;gap:14px;text-align:left;padding:20px!important}.recorder-new>span:first-child{font-size:30px}.recorder-new>span:nth-child(2){flex:1}.recorder-new small{display:block;font-size:12px;font-weight:500;margin-top:5px;opacity:.8}
+.recorder-nights{margin:32px 0}.recorder-section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.recorder-section-heading h2{font-size:18px;margin:0}.recorder-section-heading>span{padding:4px 10px;border-radius:20px;background:var(--panel2);color:var(--muted)}
+.recorder-night,.recorder-empty{padding:20px;margin-bottom:14px}.recorder-night-active{border-left:3px solid var(--accent)}.recorder-night h3{font-size:20px;margin:8px 0 18px;line-height:1.4}.recorder-night>button{width:100%}.recorder-night .season-context{box-shadow:none;border:0;border-top:1px solid var(--line);border-radius:0;padding:18px 0 0;margin:18px 0 0}.recorder-night .season-context h2{font-size:15px;margin:0}.recorder-night p,.recorder-empty p{font-size:14px;line-height:1.6;color:var(--muted)}
+.recorder-button{min-height:48px;padding:12px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);font:inherit;font-weight:700;cursor:pointer}.recorder-button:hover:not(:disabled){border-color:var(--accent)}.recorder-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.recorder-button:disabled{opacity:.5;cursor:default}
+.recorder-connection{padding:20px}.recorder-connection header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.recorder-connection h2{font-size:16px;margin:0}.recorder-network{font-size:12px;border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--muted)}.recorder-network.is-online{color:var(--accent-fg)}.recorder-connection p{font-size:14px;line-height:1.6}.recorder-help{color:var(--muted)}.recorder-connection>button{width:100%}.recorder-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}.recorder-footer p{font-size:12px;color:var(--muted)}.recorder-signout{min-width:108px}
+
+.delete-night{margin:18px 0}.delete-night>button{color:var(--danger)}.delete-night-dialog{padding:24px;width:min(480px,100%);max-height:90dvh;overflow:auto}.delete-night-dialog p{line-height:1.6;color:var(--muted)}.delete-night-buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.delete-night-buttons>button{flex:1}.delete-night-confirm{color:var(--danger);border-color:var(--danger)}

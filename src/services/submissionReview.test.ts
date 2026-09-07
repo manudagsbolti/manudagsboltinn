@@ -2,7 +2,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { db } from '../db/localDb'
-import { addPlayer, createSession, createSet, startGame, recordGoal, completeSession } from '../data/repository'
+import { addPlayer, createSession, createSet, startGame, recordGoal, completeSession, updateDraftRoster } from '../data/repository'
 import { queueSubmission } from './submissions'
 import { flushSyncQueue } from './syncQueue'
 import { syncCloud } from './cloudSync'
@@ -67,6 +67,32 @@ async function night() {
   await completeSession(session.id)
   return { session, players }
 }
+it('syncs draft attendance removal and addition without recreating the night', async () => {
+  localStorage.setItem('manudagsboltinn-access', JSON.stringify({ userId: admin, role: 'admin' }))
+  const players = []
+  for (const name of ['A','B','C','D','E']) players.push(await addPlayer(name))
+  const session = await createSession({ playedOn: '2026-09-07', playerIds: players.slice(0,4).map(p => p.id), gameDurationSeconds: 180, winsPerPoint: 1, pointsToWinSet: 4 })
+  const sendQueue = async () => {
+    const ops = (await db.syncQueue.orderBy('createdAt').toArray()).map(item => toSnakeCase({ id: item.id, table: item.table, entityId: item.entityId, operation: item.operation, payload: item.payload }))
+    await asUser('select public.apply_sync_batch($1::jsonb) result', [JSON.stringify(ops)], admin)
+    await db.syncQueue.clear()
+    return ops
+  }
+  await sendQueue()
+  await updateDraftRoster(session.id, players.slice(1).map(p => p.id))
+  const ops = await sendQueue()
+  // Receipt retries are harmless, including the composite attendance delete.
+  await asUser('select public.apply_sync_batch($1::jsonb) result', [JSON.stringify(ops)], admin)
+  const rows = await pg.query<{ player_id: string }>('select player_id from public.session_players where session_id=$1', [session.id])
+  expect(rows.rows.map(r => r.player_id).sort()).toEqual(players.slice(1).map(p => p.id).sort())
+  expect(await db.sessions.toArray()).toEqual([session])
+  await createSet(session.id, [{name:'A',color:'red',playerIds:players.slice(1,3).map(p=>p.id)}, {name:'B',color:'blue',playerIds:players.slice(3).map(p=>p.id)}])
+  await expect(updateDraftRoster(session.id, players.slice(0,4).map(p=>p.id))).rejects.toThrow('fyrsta sett')
+  await sendQueue()
+  const deletion = [{ id: crypto.randomUUID(), table:'session_players', entity_id:`${session.id}:${players[1].id}`, operation:'delete' }]
+  await expect(asUser('select public.apply_sync_batch($1::jsonb) result', [JSON.stringify(deletion)], admin)).rejects.toThrow('first set')
+  await expect(asUser('select public.apply_sync_batch($1::jsonb) result', [JSON.stringify(deletion)])).rejects.toThrow('Admin')
+})
 it('records without dates opened, queues offline, retries once, and approves atomically into season statistics', async () => {
   const { session, players } = await night()
   expect(await db.syncQueue.count()).toBe(0)
