@@ -24,6 +24,7 @@ export function StatsScreen({ onPresent }: { onPresent: (seasonId: string) => vo
   const topRating=[...analytics.players].sort((a,b)=>b.rating-a.rating)[0]
 
   return <section className="screen page-screen stats-screen">
+    {analytics.assistsIncomplete && <p className="data-quality-note">Stoðsendingar vantar í hluta skráningarinnar. Stoðsendingar og G+A telja aðeins skráð framlag.</p>}
     <div className="section-heading"><div><span className="eyebrow">TÍMABIL</span><h1>Tölfræði & verðlaun</h1></div><button className="presentation-button" onClick={()=>onPresent(selectedSeason?.id ?? String(seasonStartYearForDate(new Date().toISOString().slice(0,10))))}>▶ Kynning</button></div>
     <div className="season-picker card"><div><small>Valið tímabil</small><strong>{analytics.season.name}</strong></div><select value={selectedSeason?.id ?? ''} onChange={e=>setSelectedId(e.target.value)}>{data.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
     <div className="segmented"><button className={roleFilter==='REGULAR'?'active':''} onClick={()=>setRoleFilter('REGULAR')}>Fastamenn</button><button className={roleFilter==='SUBSTITUTE'?'active':''} onClick={()=>setRoleFilter('SUBSTITUTE')}>Varamenn</button><button className={roleFilter==='ALL'?'active':''} onClick={()=>setRoleFilter('ALL')}>Allir</button></div>

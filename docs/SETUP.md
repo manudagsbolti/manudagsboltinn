@@ -1,5 +1,19 @@
 # Production setup
 
+### Optional assists (016)
+
+Apply `supabase/migrations/016_optional_assists.sql` after 015 before deployment.
+It adds a per-night recording toggle and per-goal coverage marker. Missing/null
+legacy fields retain the enabled behavior; existing assists are unchanged.
+
+### Game history corrections (015)
+
+Apply `supabase/migrations/015_game_corrections.sql` after 014 before deploying
+the game-history editor. It adds a nullable correction-history column to sessions;
+existing facts are unchanged. Do not run empty-project setup on an existing DB.
+Try a disposable night offline: correct an earlier game, add/remove a game,
+reverse the latest correction and reconnect. Verify the history after sync.
+
 ## 1. Local
 
 Fyrir local-only keyrslu þarf ekki `.env.local`. Fyrir cloud má afrita tómu `.env.example` yfir í `.env.local` og fylla út á tækinu; ekki vista gildin í Git. `npm ci` endursetur dependencies úr lockfile.
@@ -16,7 +30,7 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 ### Nýr, tómur grunnur
 
 1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
-2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–014 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–016 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
 3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
 4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 

@@ -78,6 +78,41 @@ async function mount(teamCount = 2) {
   return {session,onFinish}
 }
 
+it('opens history in a pause and confirms an older result correction without altering the next matchup', async () => {
+  const {session}=await mount()
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt')
+  await waitFor(()=>expect(button('Anna')).toBeDefined())
+  await click('Anna'); await click('Engin')
+  await waitFor(()=>expect(button('STARTA LEIK')).toBeDefined())
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Leikir og leiðréttingar')
+  await waitFor(()=>expect(host.querySelector('.game-history-overlay')).not.toBeNull())
+  expect((await db.games.toArray()).some(g=>g.status==='live')).toBe(false)
+  const later=(await db.games.toArray()).find(g=>g.status==='paused')!
+  await act(async()=>{host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click()})
+  await act(async()=>{
+    const select=[...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s=>s.parentElement?.textContent?.startsWith('Úrslit'))!
+    select.value='timeout'; select.dispatchEvent(new Event('change',{bubbles:true}))
+  })
+  await act(async()=>{
+    const input=host.querySelector<HTMLInputElement>('.history-editor input')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'Rangt mark')
+    input.dispatchEvent(new Event('input',{bubbles:true}))
+  })
+  await click('Yfirfara breytingu')
+  expect(host.querySelector('.history-preview')?.textContent).toContain('Jafntefli')
+  expect((await db.games.toArray()).find(g=>g.gameNo===1)?.endReason).toBe('goal')
+  await click('Staðfesta breytingu')
+  await waitFor(()=>expect(host.querySelector('.history-editor')).toBeNull())
+  expect(await db.games.get(later.id)).toEqual(later)
+  expect((await db.sessions.get(session.id))?.gameCorrections).toHaveLength(1)
+  await click('Loka')
+  expect(button('▶ HALDA ÁFRAM')).toBeDefined()
+})
+
 it('pauses before scorer selection, saves assist, shows READY, then finishes into a complete summary', async () => {
   const {session,onFinish} = await mount()
   await click('STARTA LEIK')
@@ -110,6 +145,32 @@ it('cancelling finish preserves the live session with a paused timer', async () 
   expect((await db.sessions.get(session.id))?.status).toBe('live')
   expect((await db.games.toArray())[0].status).toBe('paused')
   expect(onFinish).not.toHaveBeenCalled()
+})
+
+it('skips assist selection when disabled and preserves coverage after enabling it again', async () => {
+  const {session}=await mount()
+  await click('Stoðsendingaskráning: Kveikt')
+  await waitFor(()=>expect(button('Stoðsendingaskráning: Slökkt')).toBeDefined())
+  expect((await db.sessions.get(session.id))?.assistsEnabled).toBe(false)
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt')
+  await waitFor(()=>expect(button('Anna')).toBeDefined())
+  await click('Anna')
+  await waitFor(()=>expect(button('STARTA LEIK')).toBeDefined())
+  expect((await db.goals.toArray())[0]).toMatchObject({assistPlayerId:null,assistsRecorded:false})
+  expect(host.textContent).toContain('Tölurnar sýna aðeins skráðar stoðsendingar')
+  await click('Stoðsendingaskráning: Slökkt')
+  await waitFor(()=>expect(button('Stoðsendingaskráning: Kveikt')).toBeDefined())
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt')
+  await waitFor(()=>expect(button('Anna')).toBeDefined())
+  await click('Anna'); await click('Ari')
+  await waitFor(()=>expect(button('STARTA LEIK')).toBeDefined())
+  const goals=await db.goals.toArray()
+  expect(goals.filter(g=>g.assistsRecorded===false)).toHaveLength(1)
+  expect(goals.find(g=>g.assistsRecorded===true)?.assistPlayerId).toBeTruthy()
 })
 
 it('records an own goal and distinguishes the scorer from the benefiting team in the overview', async () => {

@@ -1,5 +1,24 @@
 # Arkitektúr
 
+Optional assists: session.assistsEnabled controls future recording only;
+goal.assistsRecorded snapshots coverage and remains false when a later toggle
+re-enables recording. Nullable additive columns in migration 016 keep old rows
+compatible (missing/null means enabled/recorded). Both fields use existing raw
+sync, snapshots, backup and submission payloads. Totals retain recorded assists
+and display a coverage notice rather than interpreting unrecorded assists as
+confirmed absence. No network call is required to toggle or record a goal.
+
+Game history corrections: `src/data/gameHistory.ts` stores affected-set snapshots
+and reason/time in nullable `sessions.game_corrections` (migration 015). Existing
+local sessions remain compatible without a Dexie index migration. History follows
+session sync, backup and frozen submission payloads; it is an app change history,
+not a tamper-proof database audit. Facts, set winner, history and outbox commit
+in one Dexie transaction. SQL batches temporarily move game numbers above both
+number ranges before applying final numbering to respect immediate unique keys.
+Deletion cascades game events; reversal restores recorded timer events as well.
+No invented start/end timestamps are assigned to manually inserted games.
+Optimistic snapshot comparison rejects stale editor saves and unsafe reversal.
+
 ## Grunnhugsun
 
 Live leikur má aldrei vera háður nettengingu. Notendaaðgerð er vistuð local og UI uppfært strax. Cloud sync er secondary.

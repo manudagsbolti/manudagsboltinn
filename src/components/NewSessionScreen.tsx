@@ -16,6 +16,7 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
   const [date, setDate] = useState(edit?.playedOn ?? recordingDate ?? todayIso())
   const [seasonId, setSeasonId] = useState(edit?.seasonId ?? recordingSeasonId ?? '')
   const [busy, setBusy] = useState(false)
+  const [assistsEnabled, setAssistsEnabled] = useState(true)
   const [error, setError] = useState('')
   const [quickName, setQuickName] = useState('')
   const selectedCount = selected.size
@@ -45,7 +46,7 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
     try {
     if (edit) { await updateDraftRoster(edit.sessionId, [...selected]); onCreated(edit.sessionId); return }
     if (recordingDate && !persistedSeason) throw new Error('Sæktu kvöldið á forsíðunni áður en mæting er valin.')
-    const session = await createSession({ seasonId: persistedSeason?.id, playedOn: date, playerIds: [...selected], gameDurationSeconds: DEFAULT_RULES.gameDurationSeconds, winsPerPoint: DEFAULT_RULES.winsPerPoint, pointsToWinSet: DEFAULT_RULES.pointsToWinSet })
+    const session = await createSession({ assistsEnabled, seasonId: persistedSeason?.id, playedOn: date, playerIds: [...selected], gameDurationSeconds: DEFAULT_RULES.gameDurationSeconds, winsPerPoint: DEFAULT_RULES.winsPerPoint, pointsToWinSet: DEFAULT_RULES.pointsToWinSet })
     onCreated(session.id)
     } catch (e) { setError(e instanceof Error ? e.message : 'Vistun mistókst.') } finally { setBusy(false) }
   }
@@ -76,6 +77,7 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
     <div className="quick-add card"><input value={quickName} onChange={e => setQuickName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void quickAdd() } }} placeholder="Nýr leikmaður sem mætti í kvöld..."/><button onClick={() => void quickAdd()}>+ Bæta við</button></div>
     <p className="setup-hint">{recorder ? 'Nýr leikmaður vistast á þessu tæki og verður valinn í hópinn. Hann fer í sameiginlegu leikmannaskrána þegar stjórnandi samþykkir kvöldið.' : 'Nýr leikmaður vistast í leikmannaskrá og verður valinn í hópinn. Hann er varamaður þar til fastamannsstaða er skráð.'}</p>
     <div className="rules-card card">Leikir eru 03:00 · Fyrsta lið í 4 sigra vinnur sett.</div>
+    {!edit && <div className="card assist-setting"><button type="button" role="switch" aria-checked={assistsEnabled} disabled={busy} onClick={()=>setAssistsEnabled(!assistsEnabled)}>Stoðsendingaskráning: {assistsEnabled?'Kveikt':'Slökkt'}</button><p>Þegar slökkt er á skráningu vistast markið strax eftir val á markaskorara. Má breyta aftur á leikskjánum.</p></div>}
     <div className="sticky-action"><button className="primary jumbo" disabled={busy || selectedCount < 4} onClick={() => void next()}>Áfram <span>→</span></button><small>{selectedCount < 4 ? 'Veldu a.m.k. 4 leikmenn' : `Næst: staðfesta ${selectedCount} manna hóp og skipta í lið`}</small></div>
   </section>
 }

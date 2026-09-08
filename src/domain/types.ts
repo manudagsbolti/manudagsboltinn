@@ -48,6 +48,26 @@ export interface Session {
   completedAt?: IsoDateTime | null
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
+  gameCorrections?: GameCorrection[] | null
+  assistsEnabled?: boolean | null
+}
+
+export interface GameHistorySnapshot {
+  set: SetRecord
+  games: Game[]
+  goals: Goal[]
+  timerEvents: Array<{ id: UUID; gameId: UUID; eventType: 'START' | 'PAUSE' | 'RESUME' | 'EXPIRE'; occurredAt: string }>
+}
+
+export interface GameCorrection {
+  id: UUID
+  createdAt: string
+  reason: string
+  description: string
+  lastSetId: UUID
+  before: GameHistorySnapshot
+  after: GameHistorySnapshot
+  reversesId?: UUID
 }
 
 export interface SessionPlayer {
@@ -124,6 +144,7 @@ export interface Goal {
   scorerPlayerId: UUID
   assistPlayerId?: UUID | null
   eventType: GoalType
+  assistsRecorded?: boolean | null
   secondsElapsed: number
   createdAt: IsoDateTime
   updatedAt: IsoDateTime

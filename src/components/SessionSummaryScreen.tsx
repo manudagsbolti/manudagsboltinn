@@ -1,4 +1,5 @@
 import { DeleteNight } from './DeleteNight'
+import { GameHistory } from './GameHistory'
 import { NightTeams } from './NightTeams'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
@@ -32,11 +33,13 @@ export function SessionSummaryScreen({ sessionId, onBack, recorder = false }: { 
       <h1>{new Date(`${data.session.playedOn}T12:00:00`).toLocaleDateString('is-IS', { weekday:'long', day:'numeric', month:'long' })}</h1>
       <p>{summary.players.length} leikmenn · {summary.miniGames ?? '—'} leikir · {summary.completedSets} sett · {summary.draws ?? '—'} jafntefli · {summary.goals} mörk</p>
       <p>Gögn vistuð á þessu tæki.</p>
+      {summary.assistsIncomplete && !data.backfill && <p className="data-quality-note">Stoðsendingar voru ekki skráðar í öllum leikjum. Tölur fyrir stoðsendingar og G+A sýna aðeins skráð framlag; núll staðfestir ekki að engin stoðsending hafi verið.</p>}
       {!!summary.ownGoals && <p className="own-goal-note">Þar af {summary.ownGoals} {summary.ownGoals === 1 ? 'sjálfsmark' : 'sjálfsmörk'}. Telja í markatölu liðsins sem fékk markið, en ekki sem skoruð mörk leikmannsins.</p>}
       {summary.unfinishedGame && <p className="data-quality-note">Ólokinn leikur er varðveittur en telst ekki með. Óunnið sett fær engan settsigur.</p>}
       {data.backfill && <p className="data-quality-note">Jafntefli, stoðsendingar, sjálfsmörk og nákvæm leikjaröð voru ekki skráð. — merkir óskráð, ekki núll.</p>}
     </header>
     <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
+    <GameHistory sessionId={sessionId}/>
     {recorder && <SubmitNight sessionId={sessionId}/>}
     <NightSets data={data}/>
     <section aria-labelledby="summary-teams"><h2 id="summary-teams">Lið kvöldsins</h2>

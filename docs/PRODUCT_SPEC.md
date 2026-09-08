@@ -220,6 +220,15 @@ If the app reloads/crashes while a timer was RUNNING, recover the mini-game as *
 
 ## 7. Goal and assist recording
 
+Optional assist recording (confirmed September 2026): each new night defaults
+to assists enabled. Admins and shared recorders may disable it at setup or
+toggle it on the live screen for future goals. With recording disabled, selecting
+a normal scorer saves the goal immediately without an assist step. Existing
+assists are never erased. Each goal snapshots whether assists were recorded;
+unknown differs from explicitly no assist. Own goals retain their confirmation
+and never have an assist. Summaries flag incomplete assist/G+A coverage, and
+history corrections can explicitly choose unknown, none or a named assist.
+
 When a team scores:
 
 1. Operator taps the scoring team button.
@@ -254,7 +263,23 @@ Undo must reverse the complete transaction, not only the visible goal:
 - set completion if the goal was the 4th win
 - next-match setup
 
-Admin/history screens may later provide more granular editing of older events.
+Confirmed September 2026: a full-night game history is available during live
+recording and in the summary. Pause the running timer before opening it. Edit
+individual completed games (teams, result, scorer, assist, own goal), reorder
+within their set, insert missing games or remove erroneous games. Show a
+before/after wins and set-winner preview and require a reason and confirmation.
+Preserve later matchups and set boundaries as actually played; never replay
+rotation or move games automatically after a historical correction. Derive the
+set winner as the first team to reach the configured target in recorded order.
+A closed older set without enough wins awards no winner, even though its boundary
+remains closed. Extra recorded games after the target remain facts. A correction
+that would close the current set must wait for an already-started game to finish.
+An unstarted next matchup stays as prepared, including when starting the next set.
+Store before/after facts and a reason/time as app correction history. Permit
+reversal of the latest correction only while its affected set and last-set ID
+remain unchanged. Invalidate the old live Undo on corrections. Shared recorders
+may edit unsent local nights; frozen submissions remain immutable. Admin can
+correct approved nights. Aggregate-only history has no fabricated game editor.
 
 ## 9. Live UI
 

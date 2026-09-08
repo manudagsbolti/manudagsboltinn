@@ -11,6 +11,7 @@ import { signOutSafely } from './access'
 import { buildSeasonAnalytics } from './seasonAnalytics'
 import { cacheRecorderRatings } from './recorderRatings'
 import setupSql from '../../supabase/setup-empty-project.sql?raw'
+import { readGameHistory, saveGameEdit, reverseGameCorrection } from '../data/gameHistory'
 
 const mock = vi.hoisted(() => ({ rpc: vi.fn(), getSession: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: mock.rpc, auth: { getSession: mock.getSession } }, hasSupabaseConfig: true }))
@@ -55,10 +56,10 @@ beforeEach(async () => {
   })
 })
 afterAll(async () => { online(false); localStorage.clear(); await pg.close() })
-async function night() {
+async function night(assistsEnabled = true) {
   const players = await Promise.all(['Anna','Ari','Bára','Bjarni'].map(n => addPlayer(n)))
   // August used to require a pre-opened recording window/custom season.
-  const session = await createSession({ playedOn: '2026-08-31', playerIds: players.map(p => p.id), gameDurationSeconds: 180, winsPerPoint: 1, pointsToWinSet: 4 })
+  const session = await createSession({ assistsEnabled, playedOn: '2026-08-31', playerIds: players.map(p => p.id), gameDurationSeconds: 180, winsPerPoint: 1, pointsToWinSet: 4 })
   const set = await createSet(session.id, [{ name:'A',color:'red',playerIds:players.slice(0,2).map(p=>p.id) },{ name:'B',color:'blue',playerIds:players.slice(2).map(p=>p.id) }])
   for (let i=0;i<4;i++) {
     const game = (await db.games.where('setId').equals(set.id).sortBy('gameNo')).at(-1)!
@@ -68,6 +69,52 @@ async function night() {
   await completeSession(session.id)
   return { session, players }
 }
+it('syncs correction numbering and reversal atomically, with audit history and receipt retries', async () => {
+  const { session, players } = await night(false)
+  const seasonId = crypto.randomUUID()
+  await pg.query("insert into public.seasons(id,name,starts_on,ends_on) values ($1,'Season','2026-08-01','2026-12-31')", [seasonId])
+  await queueSubmission(session.id)
+  online(true); await flushSyncQueue(); online(false)
+  await asUser('select public.review_night($1,true,$2,$3) result', [session.id,'2026-08-31',seasonId],admin)
+  expect((await pg.query('select assists_enabled from public.sessions where id=$1',[session.id])).rows[0]).toEqual({assists_enabled:false})
+  expect((await pg.query('select assists_recorded,assist_player_id from public.goals')).rows).toEqual(Array.from({length:4},()=>({assists_recorded:false,assist_player_id:null})))
+  await db.submissions.clear()
+  localStorage.setItem('manudagsboltinn-access',JSON.stringify({userId:admin,role:'admin'}))
+  await db.sessions.update(session.id,{seasonId})
+  const set=(await db.sets.where('sessionId').equals(session.id).sortBy('setNo'))[0]
+  const original=await readGameHistory(set.id)
+  const send = async () => {
+    const ops=(await db.syncQueue.orderBy('createdAt').toArray()).map(row=>toSnakeCase({id:row.id,table:row.table,entityId:row.entityId,operation:row.operation,payload:row.payload}))
+    const result=await asUser('select public.apply_sync_batch($1::jsonb) result',[JSON.stringify(ops)],admin)
+    const retry=await asUser('select public.apply_sync_batch($1::jsonb) result',[JSON.stringify(ops)],admin)
+    expect(result.rows[0].result).toBe(ops.length)
+    expect(retry.rows[0].result).toBe(0)
+    await db.syncQueue.clear()
+  }
+  await saveGameEdit(session.id,original,{deleteGameId:original.games[1].id},'Duplicate game')
+  await send()
+  expect((await pg.query('select game_no from public.games where set_id=$1 order by game_no',[set.id])).rows).toEqual([{game_no:1},{game_no:2},{game_no:3}])
+  const correction=(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!
+  await reverseGameCorrection(session.id,correction.id)
+  await send()
+  expect((await pg.query('select count(*)::int n from public.games where set_id=$1',[set.id])).rows[0]).toEqual({n:4})
+  const restored=await readGameHistory(set.id)
+  await saveGameEdit(session.id,restored,{position:2,holderTeamId:restored.games[0].holderTeamId,challengerTeamId:restored.games[0].challengerTeamId,result:'timeout',winningTeamId:'',scorerPlayerId:'',assistPlayerId:'',ownGoal:false,exitingTeamId:''},'Missing timeout')
+  await send()
+  expect((await pg.query('select game_no from public.games where set_id=$1 order by game_no',[set.id])).rows).toEqual([1,2,3,4,5].map(game_no=>({game_no})))
+  let before=await readGameHistory(set.id)
+  const game=before.games[0]
+  await saveGameEdit(session.id,before,{gameId:game.id,position:3,holderTeamId:game.holderTeamId,challengerTeamId:game.challengerTeamId,result:'goal',winningTeamId:game.challengerTeamId,scorerPlayerId:players[0].id,assistPlayerId:'',ownGoal:true,exitingTeamId:''},'Wrong team, own goal')
+  await send()
+  const row=(await pg.query<{game_corrections:unknown}>('select game_corrections from public.sessions where id=$1',[session.id])).rows[0]
+  expect(Array.isArray(row.game_corrections)).toBe(true)
+  expect((row.game_corrections as unknown[]).length).toBe(4)
+  const cloud=await asUser('select public.get_sync_state() result',[],admin)
+  const state=fromSnakeCase((cloud.rows[0].result as {tables:unknown}).tables) as {sessions: Array<{id:string;gameCorrections:unknown}>}
+  expect(state.sessions.find(s=>s.id===session.id)?.gameCorrections).toBeDefined()
+  const denied=await asUser('select public.apply_sync_batch($1::jsonb) result',['[]']).catch(e=>e)
+  expect(denied).toBeInstanceOf(Error)
+})
 it('syncs draft attendance removal and addition without recreating the night', async () => {
   localStorage.setItem('manudagsboltinn-access', JSON.stringify({ userId: admin, role: 'admin' }))
   const players = []

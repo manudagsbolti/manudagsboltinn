@@ -64,7 +64,7 @@ export function buildSessionSummary(data: SummaryData) {
       sets: rawStats.find(p => team.playerIds.includes(p.playerId))?.setWins ?? 0,
       goals: data.backfill.rounds.reduce((sum,r) => sum + (r.teamGoals[team.code] ?? 0),0), games: null })
   }
-  return { ownGoals: data.backfill ? null : goals.filter(g => g.eventType === 'OWN_GOAL').length, players, teams: [...teams.values()], playedSets,
+  return { assistsIncomplete: !!data.backfill || goals.some(g => g.assistsRecorded === false), ownGoals: data.backfill ? null : goals.filter(g => g.eventType === 'OWN_GOAL').length, players, teams: [...teams.values()], playedSets,
     draws: data.backfill ? null : draws.length,
     completedSets: data.backfill ? data.backfill.rounds.length : sets.filter(s => s.status === 'completed').length,
     miniGames: data.backfill ? null : games.length,

@@ -1358,4 +1358,15 @@ end $$;
 revoke all on function public.get_submission_ratings() from public, anon;
 grant execute on function public.get_submission_ratings() to authenticated;
 
+-- Migration: 015_game_corrections.sql
+-- App correction history travels with the existing atomic session sync and
+-- frozen submissions. Old sessions need no backfill. This is not a security log.
+alter table public.sessions add column game_corrections jsonb;
+
+-- Migration: 016_optional_assists.sql
+-- Missing/null values keep legacy recording enabled. Per-goal coverage survives
+-- toggling the night setting without rewriting already recorded facts.
+alter table public.sessions add column assists_enabled boolean default true;
+alter table public.goals add column assists_recorded boolean default true;
+
 commit;

@@ -69,6 +69,7 @@ async function _ensureSeasonForDate(playedOn: string): Promise<Season> {
 }
 
 async function _createSession(input: {
+  assistsEnabled?: boolean
   seasonId?: UUID
   playedOn: string
   playerIds: UUID[]
@@ -83,6 +84,7 @@ async function _createSession(input: {
   if (!season || input.playedOn < season.startsOn || (season.endsOn && input.playedOn > season.endsOn)) throw new Error('Dagsetningin þarf að vera innan valinnar annar.')
   const periods = await db.rolePeriods.where('seasonId').equals(season.id).toArray()
   const session: Session = {
+    assistsEnabled: input.assistsEnabled ?? true,
     id: id(), seasonId: season.id || null, playedOn: input.playedOn, status: 'draft', gameDurationSeconds: input.gameDurationSeconds,
     winsPerPoint: input.winsPerPoint, pointsToWinSet: input.pointsToWinSet, startedAt: null, completedAt: null,
     createdAt: now, updatedAt: now,
@@ -158,15 +160,19 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[]): Promise<Set
     const previousTeams = await db.setTeams.where('setId').equals(previousSet.id).sortBy('sortOrder')
     const previousGames = await db.games.where('setId').equals(previousSet.id).sortBy('gameNo')
     const lastGame = previousGames.at(-1)
-    if (lastGame?.status === 'completed') {
-      const rotation = nextRotation(lastGame)
+    if (lastGame && ['completed', 'ready'].includes(lastGame.status)) {
+      // A historical correction may close a set with a prepared matchup.
+      // Preserve that explicit matchup instead of resetting court continuity.
+      const rotation = lastGame.status === 'completed' ? nextRotation(lastGame) : lastGame
       const map = new Map(previousTeams.map((oldTeam, index) => [oldTeam.id, teams[index]?.id]))
       initial = {
         holderTeamId: map.get(rotation.holderTeamId) ?? teams[0].id,
         challengerTeamId: map.get(rotation.challengerTeamId) ?? teams[1].id,
         waitingTeamId: rotation.waitingTeamId ? map.get(rotation.waitingTeamId) ?? null : null,
       }
-      incumbentTeamId = initial.waitingTeamId ? initial.holderTeamId : null
+      incumbentTeamId = initial.waitingTeamId ? lastGame.status === 'ready'
+        ? lastGame.incumbentTeamId ? map.get(lastGame.incumbentTeamId) ?? null : null
+        : initial.holderTeamId : null
     }
   }
   const game: Game = {
@@ -253,14 +259,16 @@ async function _recordGoal(input: { gameId: UUID; teamId: UUID; scorerPlayerId: 
   const session = await db.sessions.get(set.sessionId)
   if (!session || session.status !== 'live' || set.status === 'completed') return
   const memberships = await db.setTeamMembers.where('setId').equals(set.id).toArray()
-  validateGoal(game, memberships, input)
+  const assistPlayerId = session.assistsEnabled === false ? null : input.assistPlayerId ?? null
+  validateGoal(game, memberships, { ...input, assistPlayerId })
   const eventType = input.eventType ?? 'GOAL'
   const now = nowIso()
   const remaining = currentRemainingSeconds(game)
   if (remaining <= 0) throw new Error('Leiktíminn er liðinn. Skráðu tímann í stað marks.')
   const goal: Goal = {
     id: id(), gameId: game.id, teamId: input.teamId, scorerPlayerId: input.scorerPlayerId,
-    assistPlayerId: eventType === 'OWN_GOAL' ? null : input.assistPlayerId ?? null, eventType,
+    assistPlayerId: eventType === 'OWN_GOAL' ? null : assistPlayerId, eventType,
+    assistsRecorded: eventType === 'OWN_GOAL' || session.assistsEnabled !== false,
     secondsElapsed: Math.max(0, game.durationSeconds - remaining),
     createdAt: now, updatedAt: now, deletedAt: null,
   }
@@ -415,6 +423,13 @@ export const updatePlayer = localAction(_updatePlayer)
 export const setPlayerRole = localAction(_setPlayerRole)
 export const ensureSeasonForDate = localAction(_ensureSeasonForDate)
 export const createSession = localAction(_createSession)
+export const setAssistRecording = localAction(async (sessionId: UUID, enabled: boolean) => {
+  const session = await db.sessions.get(sessionId)
+  if (!session || session.status === 'completed' || await db.submissions.get(sessionId)) throw new Error('Aðeins má breyta skráningu í opnu, ósendu kvöldi.')
+  const updated = { ...session, assistsEnabled: enabled, updatedAt: nowIso() }
+  await db.sessions.put(updated)
+  await queuedPut('sessions', sessionId, updated)
+})
 export const updateDraftRoster = localAction(async (sessionId: UUID, playerIds: UUID[]) => {
   const session = await db.sessions.get(sessionId)
   if (!session || session.status !== 'draft' || await db.sets.where('sessionId').equals(sessionId).count() || await db.submissions.get(sessionId)) throw new Error('Aðeins er hægt að breyta hópnum áður en fyrsta sett er búið til.')
