@@ -77,6 +77,10 @@ it('syncs correction numbering and reversal atomically, with audit history and r
   online(true); await flushSyncQueue(); online(false)
   await asUser('select public.review_night($1,true,$2,$3) result', [session.id,'2026-08-31',seasonId],admin)
   expect((await pg.query('select assists_enabled from public.sessions where id=$1',[session.id])).rows[0]).toEqual({assists_enabled:false})
+  const captains=(await pg.query<{captain_player_id:string}>('select captain_player_id from public.set_teams where set_id in (select id from public.sets where session_id=$1)',[session.id])).rows
+  expect(captains).toHaveLength(4)
+  expect(captains.every(t=>!!t.captain_player_id)).toBe(true)
+  await expect(asUser('update public.set_teams set captain_player_id=$1 where set_id in (select id from public.sets where session_id=$2)',[players[0].id,session.id],admin)).rejects.toThrow()
   expect((await pg.query('select assists_recorded,assist_player_id from public.goals')).rows).toEqual(Array.from({length:4},()=>({assists_recorded:false,assist_player_id:null})))
   await db.submissions.clear()
   localStorage.setItem('manudagsboltinn-access',JSON.stringify({userId:admin,role:'admin'}))

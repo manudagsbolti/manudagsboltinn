@@ -70,7 +70,9 @@ export function NewSessionScreen({ onCreated, onCancel, recordingDate, recording
         </header>
         {!group.rows.length && <p className="setup-hint">Engir leikmenn í þessum hópi.</p>}
         <div className="attendance-grid">{group.rows.map(player => <button disabled={busy} aria-pressed={selected.has(player.id)} key={player.id} className={`attendance-player ${selected.has(player.id) ? 'selected' : ''}`} onClick={() => toggle(player.id)}>
-          <span className="checkmark">{selected.has(player.id) ? '✓' : ''}</span><strong>{player.name}</strong>{knownRoles && <small className={`role-badge ${group.id}`}>{group.id === 'regular' ? 'F · Fastamaður' : 'V · Varamaður'}</small>}{player.nickname && <small>{player.nickname}</small>}
+          <span className="checkmark" aria-hidden="true">{selected.has(player.id) ? '✓' : ''}</span>
+          <span className="attendance-identity"><strong>{player.name}</strong>{player.nickname && <small>{player.nickname}</small>}</span>
+          {knownRoles && <span className="attendance-role" title={group.id === 'regular' ? 'Fastamaður' : 'Varamaður'} aria-label={group.id === 'regular' ? 'Fastamaður' : 'Varamaður'}>{group.id === 'regular' ? 'F' : 'V'}</span>}
         </button>)}</div>
       </section>
     })}

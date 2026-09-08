@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { randomCaptain } from '../domain/captains'
 import { defaultSeasonForDate, validateSeason } from '../domain/seasons'
 import { validateGoal, validateTeams } from '../domain/validation'
 import { db } from '../db/localDb'
@@ -137,9 +138,12 @@ async function _createHistoricalSession(input: {
   return session
 }
 
-export type TeamDraft = { name: string; color: string; playerIds: UUID[] }
+export type TeamDraft = { name: string; color: string; playerIds: UUID[]; captainPlayerId?: UUID }
 
-async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[]): Promise<SetRecord> {
+async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder?: number[]): Promise<SetRecord> {
+  if (openingOrder && (openingOrder.length !== teamDrafts.length || new Set(openingOrder).size !== teamDrafts.length || openingOrder.some(index => !Number.isInteger(index) || index < 0 || index >= teamDrafts.length))) {
+    throw new Error('Upphafsröð þarf að innihalda hvert lið einu sinni.')
+  }
   const session = await db.sessions.get(sessionId)
   if (!session) throw new Error('Leikdagur fannst ekki')
   if (session.status === 'completed') throw new Error('Kvöldinu er lokið.')
@@ -151,12 +155,18 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[]): Promise<Set
     id: id(), sessionId, setNo: existing.length + 1, status: 'live', winningTeamId: null,
     startedAt: now, endedAt: null, createdAt: now, updatedAt: now,
   }
-  const teams: SetTeam[] = teamDrafts.map((draft, index) => ({ id: id(), setId: set.id, name: draft.name, color: draft.color, sortOrder: index }))
+  const teams: SetTeam[] = teamDrafts.map((draft, index) => {
+    const captainPlayerId = draft.captainPlayerId ?? randomCaptain(draft.playerIds)
+    if (!draft.playerIds.includes(captainPlayerId)) throw new Error('Fyrirliði þarf að vera í liðinu.')
+    return { id: id(), setId: set.id, name: draft.name, color: draft.color, sortOrder: index, captainPlayerId }
+  })
   const members: SetTeamMember[] = teams.flatMap((team, index) => teamDrafts[index].playerIds.map((playerId) => ({ setId: set.id, teamId: team.id, playerId })))
   let initial: Rotation = { holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: teams[2]?.id ?? null }
   let incumbentTeamId: UUID | null = null
   const previousSet = existing.at(-1)
-  if (previousSet) {
+  if (openingOrder) {
+    initial = { holderTeamId: teams[openingOrder[0]].id, challengerTeamId: teams[openingOrder[1]].id, waitingTeamId: openingOrder[2] === undefined ? null : teams[openingOrder[2]].id }
+  } else if (previousSet) {
     const previousTeams = await db.setTeams.where('setId').equals(previousSet.id).sortBy('sortOrder')
     const previousGames = await db.games.where('setId').equals(previousSet.id).sortBy('gameNo')
     const lastGame = previousGames.at(-1)

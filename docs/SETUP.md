@@ -1,5 +1,10 @@
 # Production setup
 
+### Team captains (017)
+
+Apply `supabase/migrations/017_team_captains.sql` after 016 before deployment.
+New sets save a random captain per team; older sets are not retroactively assigned.
+
 ### Optional assists (016)
 
 Apply `supabase/migrations/016_optional_assists.sql` after 015 before deployment.
@@ -30,7 +35,7 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 ### Nýr, tómur grunnur
 
 1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
-2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–016 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–017 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
 3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
 4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 
