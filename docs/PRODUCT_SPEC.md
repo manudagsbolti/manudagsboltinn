@@ -93,6 +93,14 @@ The operator can then add one or more substitutes by searching existing players.
 
 ### 4.2 Team count and sizes
 
+Captains (confirmed September 2026): randomly choose one member of each team
+for each new set, independently of player rating or role. Show a C badge before
+the name in team selection and rosters, and show the current captain's name on
+the live scoreboard for all teams including the waiting team. Persist the choice
+with the set team; rendering/reloading must not redraw it. Setup roster changes
+redraw the preview captains. Each subsequent set draws again. Historical teams
+without a saved captain remain unassigned; summaries label captain set numbers.
+
 A session supports **2 or 3 teams**.
 
 Team sizes are flexible and may be unequal. The application must not enforce equal team size.
@@ -563,3 +571,5 @@ Before creating the first set, the operator may return from team assignment to t
 Shared recorders may use weighted or fully random drawing. Weighted draws use downloaded season strength derived from approved live and manual results for all roles. Display the season and fetch date; missing ratings use neutral 100 with explicit notice. Cached inputs permit offline drawing without access to raw history.
 
 Attendance selection groups regulars above substitutes based on the selected night date and season. Select-all affects regulars only and preserves individually selected substitutes. Shared users use downloaded role periods for display only; approval still assigns authoritative snapshots. Unknown context must not label all players as substitutes. Review automatically selects the sole matching season; overlapping or absent seasons require explicit selection, with approval and role inputs unavailable until a valid season is selected.
+
+Team setup permits swapping colors between drawn groups without moving players or changing captains. The operator then selects the opening court order before confirming the set. The first game remains READY and requires Start.

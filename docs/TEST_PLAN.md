@@ -2,6 +2,11 @@
 
 ## Automated regression suite
 
+- Captains: one randomly chosen member per team, independent of team draw mode.
+  Verify C badges in setup/live, persistence through submission approval, and
+  database rejection of captains outside their team. Subsequent sets draw again;
+  reloads retain saved captains. Check long captain names on a narrow phone.
+
 - Disable assist recording: choosing a normal scorer immediately saves one goal
   with no assist and unknown coverage. Re-enable: normal assist selection returns,
   earlier coverage and goals remain unchanged. Verify the setting and goal marker
@@ -109,3 +114,5 @@ Cloudflare secrets and does not deploy the app.
 - Compare recorder RPC rating inputs with admin ALL-role analytics for approved live and manual nights. Deny unauthorized access. Confirm cached ratings survive invalid downloads and recorders can draw offline using the season containing the night date.
 
 - In admin and shared attendance selection, choose a substitute, select all regulars, then deselect all regulars: the substitute remains selected. Check date-bound roles, missing cache, and review season auto-selection/no-season placeholder.
+
+- With both two and three teams, swap drawn team colors: membership and captains stay unchanged. Choose opening court order and confirm; the saved READY game uses that order. Automatic next-set rotation remains unchanged.

@@ -150,7 +150,7 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
     <header className="live-topbar"><button onClick={onBack}>⌄</button><div><span>MÁNUDAGSBOLTINN</span><strong>{new Date(`${session.playedOn}T12:00:00`).toLocaleDateString('is-IS', { day:'numeric', month:'short' })}</strong></div><div className="live-set-pill">SETT {currentSet.setNo}</div></header>
     {error && <p className="warning-banner" role="alert">{error}</p>}
     {previousSet?.status === 'completed' && currentGame.gameNo === 1 && currentGame.status === 'ready' && <p className="set-win-notice">🏆 {data.teams.find(t => t.id === previousSet.winningTeamId)?.name} vann sett {previousSet.setNo}. Nýtt sett er tilbúið.</p>}
-    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet} setWins={setWins}/>
+    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet} setWins={setWins} playerNames={Object.fromEntries(players.map(p=>[p.id,p.name]))}/>
 
     {currentSet.status !== 'completed' ? <main className="match-stage">
       <div className="game-label">LEIKUR {currentGame.gameNo}</div>

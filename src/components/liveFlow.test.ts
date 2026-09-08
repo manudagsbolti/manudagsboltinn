@@ -23,6 +23,40 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 const button = (text: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.includes(text))!
 async function click(text: string) { await act(async () => { button(text).click() }) }
+it.each([2, 3])('swaps colors without moving players or captains and saves the opening order for %i teams', async teamCount => {
+  const players = []
+  for (const name of ['Anna', 'Ari', 'Bára', 'Bjarni', 'Cecilia', 'Carl'].slice(0, teamCount * 2)) players.push(await addPlayer(name))
+  const session = await createSession({ playedOn: '2026-09-07', playerIds: players.map(p => p.id), ...DEFAULT_RULES })
+  const onReady = vi.fn()
+  await act(async () => root.render(createElement(TeamSetupScreen, { sessionId: session.id, onReady, onCancel: vi.fn() })))
+  await waitFor(() => expect(button('SKIPTA Í LIÐ')).toBeDefined())
+  await click('SKIPTA Í LIÐ')
+  await waitFor(() => expect(button('Byrja Sett')).toBeDefined())
+  const groups = () => [...host.querySelectorAll('.team-members')].map(element => element.textContent)
+  const before = groups()
+  const change = async (selector: string, value: string) => act(async () => {
+    const select = host.querySelector<HTMLSelectElement>(selector)!
+    select.value = value; select.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await change('.team-color-choice select', '1')
+  expect(groups()).toEqual(before)
+  expect([...host.querySelectorAll('.team-column header strong')].map(el => el.textContent)).toEqual(['Grænt', 'Blátt', 'Mislit'].slice(0, teamCount))
+  await change('.start-order select', String(teamCount - 1))
+  await click('Byrja Sett')
+  await waitFor(() => expect(onReady).toHaveBeenCalledOnce())
+  const teams = (await db.setTeams.toArray()).sort((a, b) => a.sortOrder - b.sortOrder)
+  const game = (await db.games.toArray())[0]
+  expect(game.holderTeamId).toBe(teams[teamCount - 1].id)
+  expect(game.challengerTeamId).toBe(teams[teamCount === 2 ? 0 : 1].id)
+  expect(game.waitingTeamId).toBe(teamCount === 3 ? teams[0].id : null)
+  expect(game.status).toBe('ready')
+  for (const [index, team] of teams.entries()) {
+    const captain = players.find(player => player.id === team.captainPlayerId)!
+    expect(before[index]).toContain(`C${captain.name}`)
+    for (const member of await db.setTeamMembers.where('teamId').equals(team.id).toArray()) expect(before[index]).toContain(players.find(p => p.id === member.playerId)!.name)
+  }
+  await expect(createSet(session.id, [], [0, 0])).rejects.toThrow('Upphafsröð')
+})
 it('offers weighted drawing to recorders using cached season ratings offline', async () => {
   const players = []
   for (const name of ['Anna','Ari','Bára','Bjarni']) players.push(await addPlayer(name))
@@ -39,6 +73,7 @@ it('offers weighted drawing to recorders using cached season ratings offline', a
   await click('SKIPTA Í LIÐ')
   await waitFor(() => expect(button('Byrja Sett')).toBeDefined())
   expect(host.querySelectorAll('.assignment-player')).toHaveLength(4)
+  expect(host.querySelectorAll('.assignment-player .captain-badge')).toHaveLength(2)
 })
 it('edits the selected group in place and can cancel without leaving setup', async () => {
   const players = []
@@ -75,6 +110,12 @@ async function mount(teamCount = 2) {
   const onFinish = vi.fn()
   await act(async () => root.render(createElement(LiveSessionScreen,{sessionId:session.id,onFinish,onBack:vi.fn(),onReshuffle:vi.fn()})))
   await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
+  expect(host.querySelectorAll('.score-captain')).toHaveLength(teamCount)
+  const teams=await db.setTeams.toArray()
+  for(const team of teams) {
+    expect(await db.setTeamMembers.get([team.id,team.captainPlayerId!])).toBeDefined()
+    expect(host.querySelector('.set-scoreboard')?.textContent).toContain(players.find(p=>p.id===team.captainPlayerId)?.name)
+  }
   return {session,onFinish}
 }
 

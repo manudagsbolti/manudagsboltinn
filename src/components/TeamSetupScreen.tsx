@@ -1,4 +1,6 @@
 import { DeleteNight } from './DeleteNight'
+import { randomCaptain } from '../domain/captains'
+import { CaptainBadge } from './CaptainBadge'
 import { NewSessionScreen } from './NewSessionScreen'
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -36,6 +38,33 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
   const cachedRatings = useLiveQuery(() => db.ratingCache.toArray(), [])
   const [teamCount, setTeamCount] = useState(3)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
+  const [captains, setCaptains] = useState<Record<number, string>>({})
+  const [colors, setColors] = useState([0, 1, 2])
+  const [openingOrder, setOpeningOrder] = useState([0, 1, 2])
+  const teams = colors.slice(0, teamCount).map(color => TEAM_PRESETS[color])
+  const changeColor = (group: number, color: number) => setColors(current => {
+    const next = [...current]
+    const other = next.indexOf(color)
+    if (other >= 0) next[other] = next[group]
+    next[group] = color
+    return next
+  })
+  const changeOpeningOrder = (position: number, group: number) => setOpeningOrder(current => {
+    const next = [...current]
+    const other = next.indexOf(group)
+    next[other] = next[position]
+    next[position] = group
+    return next
+  })
+  const chooseCaptains = (next: Record<string, number>) => setCaptains(Object.fromEntries(Array.from({length:teamCount},(_,team)=>{
+    const ids = Object.keys(next).filter(id=>next[id]===team)
+    return [team,ids.length?randomCaptain(ids):'']
+  })))
+  const movePlayer = (playerId: string, team: number) => {
+    if (assignments[playerId]===team) return
+    const next={...assignments,[playerId]:team}
+    setAssignments(next); chooseCaptains(next)
+  }
   const [splitMode, setSplitMode] = useState<SplitMode>('full')
   const [stage, setStage] = useState<'roster'|'teams'>('roster')
   const [shuffling, setShuffling] = useState(false)
@@ -62,6 +91,8 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       ? weightedRandomAssignments(players.map(p=>p.id), teamCount, ratings)
       : randomAssignments(players.map(p=>p.id), teamCount)
     setAssignments(next)
+    chooseCaptains(next)
+    setOpeningOrder([0, 1, 2])
     setShuffling(false)
   }
   const changeCount = (count: number) => { setTeamCount(count); setAssignments({}); setStage('roster') }
@@ -72,8 +103,8 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
 
   const confirm = async () => {
     if (!balanced) return
-    const drafts: TeamDraft[] = TEAM_PRESETS.slice(0, teamCount).map((team, index) => ({ ...team, playerIds: players.filter(p => assignments[p.id] === index).map(p => p.id) }))
-    await createSet(sessionId, drafts)
+    const drafts: TeamDraft[] = teams.map((team, index) => ({ ...team, captainPlayerId: captains[index], playerIds: players.filter(p => assignments[p.id] === index).map(p => p.id) }))
+    await createSet(sessionId, drafts, openingOrder.slice(0, teamCount))
     onReady()
   }
 
@@ -106,16 +137,19 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       <div className="split-toolbar"><button disabled={shuffling} onClick={()=>{setStage('roster')}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>
       {shuffling ? <div className="shuffle-stage card"><div className="shuffle-orb">⤨</div><h2>Drögum í lið…</h2><div className="shuffle-names">{players.slice(0,6).map((p,i)=><span key={p.id} style={{animationDelay:`${i*70}ms`}}>{p.name}</span>)}</div></div> : <>
         <p className="setup-hint">Liðin eru tillaga. Þú getur fært leikmann handvirkt með litapunktunum áður en settið hefst.</p>
+        <p className="setup-hint"><CaptainBadge/> Fyrirliðar eru dregnir af handahófi fyrir hvert sett. Ef hópum er breytt er dregið aftur.</p>
+        <p className="setup-hint">Veldu lit við hvert lið. Litaskipti halda leikmönnum og fyrirliðum saman. Veldu síðan hvaða lið byrja inni hér fyrir neðan.</p>
         <div className={`team-setup-grid cols-${teamCount}`}>
-          {TEAM_PRESETS.slice(0, teamCount).map((team, teamIndex) => <section className="team-column card" key={team.name} style={{ '--team-color': team.color } as React.CSSProperties}>
+          {teams.map((team, teamIndex) => <section className="team-column card" key={teamIndex} style={{ '--team-color': team.color } as React.CSSProperties}>
             <header><span className="team-dot"/><div><strong>{team.name}</strong><small>{counts[teamIndex]} leikmenn{!recorder && ` · styrkur ${teamStrength(assignments,teamIndex,ratings)}`}</small></div></header>
+            <label className="team-color-choice">Litur liðs {teamIndex + 1}<select value={colors[teamIndex]} onChange={event => changeColor(teamIndex, Number(event.target.value))}>{TEAM_PRESETS.map((preset, index) => <option key={preset.name} value={index}>{preset.name}</option>)}</select></label>
             <div className="team-members">
-              {players.filter(p => assignments[p.id] === teamIndex).map(player => <div className="assignment-player" key={player.id}><span>{player.name}</span><div className="mini-team-switch">{TEAM_PRESETS.slice(0, teamCount).map((preset, idx) => <button key={preset.name} title={`Færa í ${preset.name}`} className={idx === teamIndex ? 'current' : ''} style={{ background: preset.color }} onClick={() => setAssignments(prev => ({ ...prev, [player.id]: idx }))}/>)}</div></div>)}
+              {players.filter(p => assignments[p.id] === teamIndex).map(player => <div className="assignment-player" key={player.id}><span>{captains[teamIndex]===player.id && <CaptainBadge/>}{player.name}</span><div className="mini-team-switch">{teams.map((preset, idx) => <button key={preset.name} title={`Færa í ${preset.name}`} className={idx === teamIndex ? 'current' : ''} style={{ background: preset.color }} onClick={() => movePlayer(player.id,idx)}/>)}</div></div>)}
             </div>
           </section>)}
         </div>
         {!balanced && <div className="warning-banner">Öll lið þurfa leikmenn og hver leikmaður þarf lið. Lið mega vera misstór.</div>}
-        <div className="start-order card"><strong>Upphafsröð</strong><div>{TEAM_PRESETS.slice(0, teamCount).map((team, i) => <span key={team.name}><b style={{ background: team.color }}/>{i === 0 ? `${team.name} inni` : i === 1 ? `${team.name} áskorandi` : `${team.name} bíður`}</span>)}</div></div>
+        <div className="start-order card"><strong>Upphafsröð</strong><div>{openingOrder.slice(0, teamCount).map((group, position) => <label key={position}>{position === 2 ? 'Bíður' : `Byrjar inni · lið ${position + 1}`}<select value={group} onChange={event => changeOpeningOrder(position, Number(event.target.value))}>{teams.map((team, index) => <option key={index} value={index}>{team.name}</option>)}</select></label>)}</div></div>
         <div className="sticky-action"><button className="primary jumbo" disabled={!balanced} onClick={() => void confirm()}>Byrja Sett {data.setNo} <span>→</span></button></div>
       </>}
     </>}

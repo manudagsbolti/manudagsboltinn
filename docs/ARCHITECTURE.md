@@ -1,5 +1,12 @@
 # Arkitektúr
 
+SetTeam.captainPlayerId is an optional persisted team-member ID (migration 017).
+A deferred composite FK ensures membership while allowing the existing ordered
+team-then-membership inserts within atomic sync/submission transactions. Legacy
+teams keep null. No Dexie index change is required; existing sync/backup flows
+include the field. Captains are sampled uniformly once during set creation or
+confirmed from the setup preview, independently of the weighted team algorithm.
+
 Optional assists: session.assistsEnabled controls future recording only;
 goal.assistsRecorded snapshots coverage and remains false when a later toggle
 re-enables recording. Nullable additive columns in migration 016 keep old rows

@@ -107,6 +107,7 @@ export interface SetTeam {
   name: string
   color: string
   sortOrder: number
+  captainPlayerId?: UUID | null
 }
 
 export interface SetTeamMember {
