@@ -1,4 +1,6 @@
 import { DeleteNight } from './DeleteNight'
+import { GameHistory } from './GameHistory'
+import { AssistSetting } from './AssistSetting'
 import { NightTeams } from './NightTeams'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -181,13 +183,17 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
       <button disabled={busy || !undoAvailable} onClick={() => void run(() => undoLastScoringAction(sessionId))}>↶ Afturkalla síðasta leik</button>
       <button disabled={busy} onClick={() => void run(finish)}>Klára kvöldið</button>
     </div>
+    <GameHistory sessionId={sessionId}/>
+    <AssistSetting sessionId={sessionId} enabled={session.assistsEnabled !== false}/>
     <DeleteNight sessionId={sessionId} onDeleted={onBack}/>
     <section className="live-session-stats">
     <NightSets data={data}/>
+    {summary.assistsIncomplete && <p className="data-quality-note">Stoðsendingar eru ekki skráðar í öllum leikjum. Tölurnar sýna aðeins skráðar stoðsendingar.</p>}
     <h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
     <h2>Staða allra leikmanna</h2><div className="summary-table-wrap"><table className="summary-table"><thead><tr><th>Leikmaður</th><th>Sett</th><th>Sigrar</th><th>Jafntefli</th><th>Mörk</th><th>Stoðs.</th></tr></thead><tbody>{summary.players.map(p => <tr key={p.playerId}><th scope="row">{p.name}</th><td>{p.setWins}</td><td>{p.smallWins}</td><td>{p.draws}</td><td>{p.goals}</td><td>{p.assists}</td></tr>)}</tbody></table></div></section>
     {goalTeam && <GoalModal
       team={goalTeam} players={membersForGoalTeam} defendingPlayers={defendingPlayers}
+      assistsEnabled={session.assistsEnabled !== false}
       onClose={() => setGoalTeamId(null)} onSave={saveGoal}
     />}
     {choosingOutgoing && <TimeoutChoiceModal holder={holder} challenger={challenger} onChoose={teamId => void run(() => chooseOutgoing(teamId))} />}

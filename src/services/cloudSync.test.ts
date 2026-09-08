@@ -56,6 +56,8 @@ beforeAll(async () => {
   // Regression coverage for the deployed pre-submission contract (001–010).
   // submissionReview.test.ts exercises the full latest generated setup.
   await pg.exec(Object.keys(migrations).sort().filter(f => Number(f.split('/').at(-1)!.slice(0,3)) <= 10).map(f => migrations[f]).join('\n'))
+  // Keep the legacy permissions contract while accepting current additive fields.
+  await pg.exec(migrations['../../supabase/migrations/016_optional_assists.sql'])
   await pg.query('insert into public.app_admins values ($1)', [admin])
   await pg.query('insert into public.app_recorders values ($1)', [recorder])
 }, 30_000)

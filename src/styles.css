@@ -199,3 +199,33 @@ h1,h2,h3{color:var(--text)}
 .delete-night{margin:18px 0}.delete-night>button{color:var(--danger)}.delete-night-dialog{padding:24px;width:min(480px,100%);max-height:90dvh;overflow:auto}.delete-night-dialog p{line-height:1.6;color:var(--muted)}.delete-night-buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.delete-night-buttons>button{flex:1}.delete-night-confirm{color:var(--danger);border-color:var(--danger)}
 .set-win-stars{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;min-height:22px;margin-top:6px;color:#eab308;font-size:20px;line-height:1.1}.set-win-stars span{filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
 .attendance-group{margin:24px 0}.attendance-group-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.attendance-group-heading h2{margin:0 0 4px}.attendance-group-heading small{color:var(--muted)}
+/* Full-night corrections remain usable with one hand on a narrow phone. */
+.history-open { display:block; width:100%; padding:16px; margin:12px 0; border:2px solid #496346; border-radius:14px; background:#edf3e8; color:#243820; font:inherit; font-weight:750; min-height:54px; }
+.game-history-overlay { position:fixed; inset:0; z-index:1000; background:rgba(15,25,17,.65); overflow:auto; padding:20px 12px; overscroll-behavior:contain; }
+.game-history-sheet { max-width:800px; margin:0 auto; background:#f8faf5; color:#243020; padding:24px; border-radius:20px; box-shadow:0 12px 50px #0004; }
+.game-history-sheet header,.history-set-heading,.history-game,.history-actions { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.game-history-sheet h2,.game-history-sheet h3 { margin:8px 0; }
+.game-history-sheet button { min-height:46px; padding:10px 16px; border:1px solid #72866a; border-radius:10px; background:#fff; color:#243020; font:inherit; font-weight:650; cursor:pointer; }
+.game-history-sheet button.primary { background:#36592a; color:#fff; }
+.game-history-sheet button:disabled { opacity:.45; cursor:default; }
+.game-history-sheet :is(button,input,select,summary):focus-visible { outline:3px solid #4d82bd; outline-offset:3px; }
+.history-set,.history-editor,.history-audit { margin-top:20px; padding:16px; border:1px solid #d3ddcd; background:white; border-radius:14px; }
+.history-set-heading { flex-wrap:wrap; margin-bottom:12px; }
+.history-game { padding:14px 0; border-top:1px solid #e0e7db; }
+.history-game>div { display:grid; gap:5px; }
+.history-game small { font-size:11px; letter-spacing:.08em; color:#53654d; }
+.history-game span { font-size:14px; }
+.history-game button { flex-shrink:0; }
+.history-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:14px 0; }
+.history-editor label { display:grid; gap:6px; font-weight:650; }
+.history-editor :is(select,input) { width:100%; min-width:0; min-height:48px; border:1px solid #9da996; border-radius:8px; padding:10px; background:#fff; color:#243020; font:inherit; }
+.history-actions { margin-top:18px; flex-wrap:wrap; }
+.history-preview table { width:100%; border-collapse:collapse; margin:16px 0; }
+.history-preview :is(th,td) { padding:10px; border-bottom:1px solid #d3ddcd; text-align:left; }
+.history-audit summary { cursor:pointer; padding:8px; font-weight:700; }
+.history-audit article { padding:12px 0; border-top:1px solid #d3ddcd; }
+@media(max-width:540px) { .game-history-overlay { padding:0; } .game-history-sheet { padding:16px; min-height:100%; border-radius:0; } .history-fields { grid-template-columns:1fr; } .history-set,.history-editor { padding:12px; } }
+.assist-setting { display:grid; gap:8px; margin:12px 0; }
+.assist-setting button { min-height:48px; padding:12px 16px; border:2px solid #75856c; border-radius:12px; background:#fff; color:#263821; font:inherit; font-weight:700; }
+.assist-setting button[aria-checked="true"] { background:#e5f0de; border-color:#496a3c; }
+.assist-setting small,.assist-setting p { margin:0; color:#53634c; }

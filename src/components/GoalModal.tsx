@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { Player, SetTeam } from '../domain/types'
 
-export function GoalModal({ team, players, defendingPlayers, onClose, onSave }: {
+export function GoalModal({ team, players, defendingPlayers, onClose, onSave, assistsEnabled = true }: {
+  assistsEnabled?: boolean
   team: SetTeam
   players: Player[]
   defendingPlayers: Player[]
@@ -14,10 +15,10 @@ export function GoalModal({ team, players, defendingPlayers, onClose, onSave }: 
   const [error, setError] = useState('')
   const choices = ownGoal ? defendingPlayers : players
   const scorerPlayer = choices.find(player => player.id === scorer)
-  const save = async (assist: string | null) => {
-    if (!scorer || saving) return
+  const save = async (assist: string | null, selectedScorer = scorer) => {
+    if (!selectedScorer || saving) return
     setSaving(true)
-    try { await onSave(scorer, assist, ownGoal ? 'OWN_GOAL' : 'GOAL') }
+    try { await onSave(selectedScorer, assist, ownGoal ? 'OWN_GOAL' : 'GOAL') }
     catch { setError('Markið vistaðist ekki. Reyndu aftur.'); setSaving(false) }
   }
 
@@ -29,7 +30,8 @@ export function GoalModal({ team, players, defendingPlayers, onClose, onSave }: 
       {!scorer ? <>
         <button type="button" className="own-goal-toggle" aria-pressed={ownGoal} onClick={() => setOwnGoal(!ownGoal)}><span aria-hidden="true">↩</span> {ownGoal ? 'Sjálfsmark valið · skipta í venjulegt mark' : 'Skrá sjálfsmark'}</button>
         {ownGoal && <p className="setup-hint">Veldu leikmann andstæðinganna sem gerði sjálfsmarkið. Markið telur fyrir {team.name}; engin stoðsending er skráð.</p>}
-        <div className="player-choice-grid">{choices.map(player => <button key={player.id} onClick={() => setScorer(player.id)}><span className="choice-avatar">{player.name[0]}</span><strong>{player.name}</strong></button>)}</div>
+        {!assistsEnabled && !ownGoal && <p className="setup-hint">Stoðsendingaskráning er slökkt. Val á markaskorara vistar markið.</p>}
+        <div className="player-choice-grid">{choices.map(player => <button disabled={saving} key={player.id} onClick={() => { if (!assistsEnabled && !ownGoal) void save(null, player.id); else setScorer(player.id) }}><span className="choice-avatar">{player.name[0]}</span><strong>{player.name}</strong></button>)}</div>
       </> : <>
         <div className="scorer-confirm"><span>{ownGoal ? 'Sjálfsmark' : 'Mark'}</span><strong>⚽ {scorerPlayer?.name}</strong><button onClick={() => setScorer(null)}>Breyta</button></div>
         {ownGoal ? <button className="primary jumbo" disabled={saving} onClick={() => void save(null)}>Vista sjálfsmark</button> : <>

@@ -2,6 +2,21 @@
 
 ## Automated regression suite
 
+- Disable assist recording: choosing a normal scorer immediately saves one goal
+  with no assist and unknown coverage. Re-enable: normal assist selection returns,
+  earlier coverage and goals remain unchanged. Verify the setting and goal marker
+  survive shared submission/approval and sync; display incomplete coverage.
+
+- Game history: edit an older goal/timeout/own goal, insert/reorder/remove games,
+  retain later matchups and set boundaries, update/remove the set winner, and
+  reverse a correction with its timer events. Reject stale drafts, invalid
+  scorers/assists, running timers and frozen submissions. Roll back facts and
+  outbox together on failure. SQL tests verify immediate numbering constraints,
+  active-goal uniqueness, audit sync and idempotent receipt retries.
+- Phone acceptance: open Leikir og leiðréttingar during play, verify pause,
+  preview a correction, cancel with no changes, confirm and continue manually.
+  Repeat offline and inspect the corrected night after syncing on another device.
+
 Run `npm test`, `npm run typecheck`, and `npm run build`.
 Vitest uses an isolated fake IndexedDB and no local environment/cloud credentials.
 

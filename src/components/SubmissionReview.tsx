@@ -56,6 +56,7 @@ export function SubmissionReview() {
     <button disabled={busy} onClick={() => void run(load)}>Sækja innsendingar</button>
     {items.map(i => <button disabled={busy} key={i.id} onClick={() => { setSelected(i); setDate(i.payload.session?.playedOn ?? ''); setSeasonId(null); setRoles({}); setMessage('') }}>{i.payload.session?.playedOn ?? 'Ógild dagsetning'} · Yfirfara kvöld</button>)}
     {selected && <article><h3>Yfirferð kvölds</h3>
+      {summary?.assistsIncomplete && <p className="data-quality-note">Stoðsendingaskráning er ófullkomin. Sýndar tölur telja aðeins skráðar stoðsendingar.</p>}
       {summary ? <><p>{summary.players.length} leikmenn · {summary.goals} mörk · {summary.completedSets} unnin sett</p><NightSets data={selected.payload}/>
         <label className="field">Leikdagur<input type="date" required value={date} onChange={e => { setDate(e.target.value); setSeasonId(null); setRoles({}) }} /></label>
         <label className="field">Önn<select required value={seasonId} onChange={e => { setSeasonId(e.target.value); setRoles({}) }}><option value="">Veldu önn</option>{seasons.map(s => <option key={s.id} value={s.id}>{s.name} · {s.startsOn} – {s.endsOn}</option>)}</select></label>

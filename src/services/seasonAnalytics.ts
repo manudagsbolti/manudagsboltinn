@@ -38,6 +38,7 @@ export interface SeasonAward {
 }
 
 export interface SeasonAnalytics {
+  assistsIncomplete: boolean
   season: Season
   sessions: Session[]
   players: SeasonPlayerAnalytics[]
@@ -159,6 +160,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
   applyRatings(rows)
 
   return {
+    assistsIncomplete: seasonGoals.some(g => g.assistsRecorded === false) || !!data.backfills?.some(b => sessionIds.has(b.sessionId)),
     season,
     sessions,
     players: rows,
