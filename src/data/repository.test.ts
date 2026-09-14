@@ -5,9 +5,59 @@ import { calculateSessionPlayerStats } from '../services/stats'
 import { buildSeasonAnalytics } from '../services/seasonAnalytics'
 import { buildSessionSummary, type SummaryData } from '../services/sessionSummary'
 import { completeSession, saveSeason, correctSessionDate, createHistoricalSession, correctSessionPlayerRole } from './repository'
+import { adjustGameClock, changeCurrentMatchup } from './repository'
 import { createSession, createSet, startGame, pauseGame, resumeGame, recordGoal, timeoutGame, createNextGame, recoverRunningGames, undoLastScoringAction, setPlayerRole } from './repository'
 
 const epoch = Date.parse('2026-09-07T20:00:00Z')
+it('adjusts a paused clock offline, validates bounds and resumes from the saved time', async () => {
+  const { game } = await setup()
+  await startGame(game.id)
+  await expect(adjustGameClock(game.id, 90, game.updatedAt)).rejects.toThrow()
+  vi.setSystemTime(epoch + 30_000)
+  await pauseGame(game.id)
+  const paused = (await db.games.get(game.id))!
+  for (const seconds of [0, -1, 181, 1.5, NaN]) await expect(adjustGameClock(game.id, seconds, paused.updatedAt)).rejects.toThrow()
+  await expect(adjustGameClock(game.id, 90, game.updatedAt)).rejects.toThrow('breyst')
+  await adjustGameClock(game.id, 90, paused.updatedAt)
+  db.close(); await db.open()
+  expect(await db.games.get(game.id)).toMatchObject({ status: 'paused', remainingSeconds: 90, timerStartedAt: null })
+  await resumeGame(game.id)
+  vi.setSystemTime(epoch + 40_000)
+  expect(currentRemainingSeconds((await db.games.get(game.id))!)).toBe(80)
+})
+
+it('changes current court teams without rewriting history and uses the selected incumbent for the next draw', async () => {
+  const { session, teams } = await setup()
+  await score(session.id)
+  const history = (await db.games.toArray()).find(g => g.status === 'completed')!
+  const game = await latest(session.id)
+  await expect(changeCurrentMatchup(game.id, teams[0].id, teams[0].id, null, game.updatedAt)).rejects.toThrow()
+  await changeCurrentMatchup(game.id, teams[1].id, teams[2].id, teams[2].id, game.updatedAt)
+  expect(await db.games.get(history.id)).toEqual(history)
+  expect(await db.undoActions.count()).toBe(0)
+  await startGame(game.id)
+  vi.setSystemTime(epoch + 180_000)
+  await timeoutGame(game.id)
+  expect(await latest(session.id)).toMatchObject({ holderTeamId: teams[1].id, challengerTeamId: teams[0].id, waitingTeamId: teams[2].id, status: 'ready' })
+})
+
+it('records a final-whistle goal only after an explicit paused decision, including fourth-win Undo', async () => {
+  const { session } = await setup([4,4])
+  for (let n = 0; n < 3; n++) await score(session.id)
+  const game = await latest(session.id)
+  await startGame(game.id)
+  vi.setSystemTime(epoch + 180_000)
+  const input = { gameId: game.id, teamId: game.holderTeamId, scorerPlayerId: '0-0' }
+  await expect(recordGoal({ ...input, atFinalWhistle: true })).rejects.toThrow()
+  await pauseGame(game.id)
+  await expect(recordGoal(input)).rejects.toThrow()
+  await recordGoal({ ...input, atFinalWhistle: true })
+  expect(await db.sets.count()).toBe(2)
+  expect(await latest(session.id)).toMatchObject({ status: 'ready', remainingSeconds: 180 })
+  await undoLastScoringAction(session.id)
+  expect(await db.sets.count()).toBe(1)
+  expect(await db.games.get(game.id)).toMatchObject({ status: 'paused', remainingSeconds: 0 })
+})
 describe('session date corrections', () => {
   it('corrects only one attendance snapshot and keeps a reversible history without changing events or general roles', async () => {
     const { session } = await setup([4,4])

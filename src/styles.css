@@ -244,3 +244,20 @@ h1,h2,h3{color:var(--text)}
 .captain-sets { display:block; margin-top:3px; font-size:11px; color:#635011; }
 
 .team-color-choice,.start-order label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;min-width:0}.team-color-choice{padding:10px 12px}.team-color-choice select,.start-order select{min-height:44px;width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:inherit}.start-order label{flex:1;min-width:130px}
+
+/* Live scores take priority over captain details. */
+.score-team > strong { font-size:clamp(40px,10vw,60px); font-variant-numeric:tabular-nums; }
+.score-team-name { font-size:14px; }
+.score-team > small { font-size:12px; color:var(--text-soft); }
+.score-night-totals { display:flex; justify-content:center; gap:14px; margin-top:10px; }
+.score-night-totals div { display:flex; flex-direction:column; }
+.score-night-totals b { font-size:26px; line-height:1.1; font-variant-numeric:tabular-nums; }
+.score-night-totals span { font-size:10px; color:var(--text-soft); }
+.score-captain { font-size:10px; font-weight:500; margin-top:6px; align-items:center; }
+.score-captain .captain-badge { width:14px; height:14px; flex-basis:14px; font-size:9px; border-width:1px; border-radius:4px; margin-right:2px; }
+.live-game-editor { margin:8px auto; max-width:590px; }
+.live-game-editor > button { min-height:44px; padding:8px 12px; }
+.live-edit-fields { padding:14px; display:flex; flex-wrap:wrap; gap:10px; text-align:left; }
+.live-edit-fields label { display:flex; flex-direction:column; gap:6px; flex:1 1 150px; }
+.live-edit-fields input,.live-edit-fields select,.live-edit-fields button { min-height:44px; }
+.live-edit-fields p { flex-basis:100%; }

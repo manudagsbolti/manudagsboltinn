@@ -261,7 +261,7 @@ async function _timeoutGame(gameId: UUID, outgoingTeamId?: UUID): Promise<void> 
   await createNextGame(gameId)
 }
 
-async function _recordGoal(input: { gameId: UUID; teamId: UUID; scorerPlayerId: UUID; assistPlayerId?: UUID | null; eventType?: 'GOAL' | 'OWN_GOAL' }): Promise<void> {
+async function _recordGoal(input: { gameId: UUID; teamId: UUID; scorerPlayerId: UUID; assistPlayerId?: UUID | null; eventType?: 'GOAL' | 'OWN_GOAL'; atFinalWhistle?: boolean }): Promise<void> {
   const game = await db.games.get(input.gameId)
   if (!game || !['live', 'paused'].includes(game.status)) return
   const set = await db.sets.get(game.setId)
@@ -274,7 +274,7 @@ async function _recordGoal(input: { gameId: UUID; teamId: UUID; scorerPlayerId: 
   const eventType = input.eventType ?? 'GOAL'
   const now = nowIso()
   const remaining = currentRemainingSeconds(game)
-  if (remaining <= 0) throw new Error('Leiktíminn er liðinn. Skráðu tímann í stað marks.')
+  if (remaining <= 0 && !(input.atFinalWhistle && game.status === 'paused')) throw new Error('Leiktíminn er liðinn. Skráðu tímann í stað marks.')
   const goal: Goal = {
     id: id(), gameId: game.id, teamId: input.teamId, scorerPlayerId: input.scorerPlayerId,
     assistPlayerId: eventType === 'OWN_GOAL' ? null : assistPlayerId, eventType,
@@ -463,6 +463,35 @@ export const createSet = localAction(_createSet)
 export const startGame = localAction(_startGame)
 export const pauseGame = localAction(_pauseGame)
 export const resumeGame = localAction(_resumeGame)
+async function editableCurrentGame(gameId: UUID, expectedUpdatedAt: string) {
+  const game = await db.games.get(gameId)
+  const set = game && await db.sets.get(game.setId)
+  const session = set && await db.sessions.get(set.sessionId)
+  const sets = session && await db.sets.where('sessionId').equals(session.id).sortBy('setNo')
+  const games = set && await db.games.where('setId').equals(set.id).sortBy('gameNo')
+  if (!game || !set || !session || session.status !== 'live' || set.status !== 'live' || sets?.at(-1)?.id !== set.id || games?.at(-1)?.id !== game.id || !['ready', 'paused'].includes(game.status) || await db.submissions.get(session.id)) throw new Error('Aðeins má breyta núverandi leik í pásu eða tilbúnum leik.')
+  if (game.updatedAt !== expectedUpdatedAt) throw new Error('Leikurinn hefur breyst. Opnaðu breytinguna aftur.')
+  return { game, session }
+}
+
+export const adjustGameClock = localAction(async (gameId: UUID, seconds: number, expectedUpdatedAt: string) => {
+  const { game } = await editableCurrentGame(gameId, expectedUpdatedAt)
+  if (!Number.isInteger(seconds) || seconds <= 0 || seconds > game.durationSeconds) throw new Error('Veldu tíma innan leiktímans.')
+  const updated = { ...game, remainingSeconds: seconds, timerStartedAt: null, updatedAt: nowIso() }
+  await db.games.put(updated)
+  await queuedPut('games', gameId, updated)
+})
+
+export const changeCurrentMatchup = localAction(async (gameId: UUID, holderTeamId: UUID, challengerTeamId: UUID, incumbentTeamId: UUID | null, expectedUpdatedAt: string) => {
+  const { game, session } = await editableCurrentGame(gameId, expectedUpdatedAt)
+  const teams = await db.setTeams.where('setId').equals(game.setId).toArray()
+  if (holderTeamId === challengerTeamId || ![holderTeamId, challengerTeamId].every(id => teams.some(t => t.id === id)) || (incumbentTeamId && ![holderTeamId, challengerTeamId].includes(incumbentTeamId))) throw new Error('Veldu tvö ólík lið á völlinn og rétt lið sem hefur verið lengur inni.')
+  const waitingTeamId = teams.find(t => ![holderTeamId, challengerTeamId].includes(t.id))?.id ?? null
+  const updated = { ...game, holderTeamId, challengerTeamId, waitingTeamId, incumbentTeamId: waitingTeamId ? incumbentTeamId : null, updatedAt: nowIso() }
+  await db.games.put(updated)
+  await db.undoActions.where('sessionId').equals(session.id).delete()
+  await queuedPut('games', gameId, updated)
+})
 export const timeoutGame = localAction(_timeoutGame)
 export const recordGoal = localAction(_recordGoal)
 export const createNextGame = localAction(_createNextGame)
