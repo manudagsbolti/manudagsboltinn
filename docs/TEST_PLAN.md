@@ -70,6 +70,21 @@ Cloudflare secrets and does not deploy the app.
 - no outgoing/incoming rotation
 
 ## Timer
+- At expiry in both two- and three-team mode, including a known incumbent, verify
+  the buzzer sounds once and the same game stays PAUSED at zero with no result
+  or rotation until input. Choose draw; ask outgoing only if unknown. Choose a
+  missed goal; normal scorer/assist/own-goal flow applies, including set win/Undo.
+- Reload while awaiting a decision; TÍMI reopens the result choice, without an
+  automatically saved draw. Cancel goal selection returns to the result choice.
+- Open Stilla klukku during play: pauses immediately. Editing the field changes
+  nothing until confirmation; reject zero, negative, fractional or over-duration
+  values. Save 75 seconds, reload, then explicitly resume from 01:15.
+- Correct history during live play with inline preview and one save, optionally
+  without a typed reason. In the same history screen change the current court
+  teams/incumbent, save and close: live buttons and waiting team match the choice;
+  completed facts stay unchanged and next rotation follows the selected incumbent.
+- Check on a narrow phone that current scores and numeric set/night wins are
+  readable, captain labels are compact, and large timer/goal buttons remain usable.
 - 03:00 -> 00:00
 - pause freezes exactly
 - resume continues remaining duration

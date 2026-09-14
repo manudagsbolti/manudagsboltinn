@@ -143,10 +143,9 @@ it('opens history in a pause and confirms an older result correction without alt
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'Rangt mark')
     input.dispatchEvent(new Event('input',{bubbles:true}))
   })
-  await click('Yfirfara breytingu')
   expect(host.querySelector('.history-preview')?.textContent).toContain('Jafntefli')
   expect((await db.games.toArray()).find(g=>g.gameNo===1)?.endReason).toBe('goal')
-  await click('Staðfesta breytingu')
+  await click('Vista breytingu')
   await waitFor(()=>expect(host.querySelector('.history-editor')).toBeNull())
   expect(await db.games.get(later.id)).toEqual(later)
   expect((await db.sessions.get(session.id))?.gameCorrections).toHaveLength(1)
@@ -267,8 +266,12 @@ it('buzzes on first timeout, asks for outgoing team, then prepares READY without
   const game = (await db.games.toArray())[0]
   vi.useFakeTimers({toFake:['Date']})
   vi.setSystemTime(Date.parse(game.timerStartedAt!) + 180_000)
-  await waitFor(() => expect(host.textContent).toContain('Hvort liðið fer út?'))
+  await waitFor(() => expect(host.textContent).toContain('hver urðu úrslitin?'))
   expect(playBuzzer).toHaveBeenCalledOnce()
+  expect((await db.games.get(game.id))?.status).toBe('paused')
+  expect(await db.games.count()).toBe(1)
+  await click('Jafntefli · ekkert mark')
+  await waitFor(() => expect(host.textContent).toContain('Hvort liðið fer út?'))
   await act(async () => { host.querySelector<HTMLButtonElement>('.timeout-team-choices button')!.click() })
   await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
   expect(host.querySelector('[role="timer"]')?.textContent).toBe('03:00')
@@ -276,6 +279,86 @@ it('buzzes on first timeout, asks for outgoing team, then prepares READY without
   const next = (await db.games.toArray()).find(g=>g.status==='ready')!
   expect(next.waitingTeamId).toBe(game.holderTeamId)
   expect([...host.querySelectorAll('.summary-numbers div')].filter(d => d.querySelector('dt')?.textContent === 'Jafntefli').map(d => d.querySelector('dd')?.textContent)).toEqual(['1','1','0'])
+})
+
+it('edits the clock in two steps and leaves play paused until explicit resume', async () => {
+  await mount()
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Stilla klukku')
+  await waitFor(() => expect(host.querySelector('.live-edit-fields input')).not.toBeNull())
+  const before = (await db.games.toArray())[0]
+  expect(before.status).toBe('paused')
+  await act(async () => {
+    const input = host.querySelector<HTMLInputElement>('.live-edit-fields input')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '75')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect((await db.games.get(before.id))?.remainingSeconds).toBe(before.remainingSeconds)
+  await click('Staðfesta tíma · 01:15')
+  await waitFor(() => expect(host.querySelector('[role="timer"]')?.textContent).toBe('01:15'))
+  expect((await db.games.get(before.id))?.status).toBe('paused')
+  await click('▶ HALDA ÁFRAM')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+})
+
+it('corrects the last result with one save, then selects the actual next matchup inside history', async () => {
+  await mount(3)
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt'); await waitFor(() => expect(button('Anna')).toBeDefined())
+  await click('Anna'); await click('Engin')
+  await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
+  await click('Leikir og leiðréttingar')
+  await waitFor(() => expect(host.querySelector('.game-history-overlay')).not.toBeNull())
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click())
+  await act(async () => {
+    const select = [...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s => s.parentElement?.textContent?.startsWith('Úrslit'))!
+    select.value = 'timeout'; select.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await click('Vista breytingu')
+  await waitFor(() => expect(host.querySelector('.history-editor')).toBeNull())
+  const corrected = (await db.games.toArray()).find(g => g.status === 'completed')!
+  expect(corrected.endReason).toBe('timeout')
+  await act(async () => host.querySelector<HTMLButtonElement>('.game-history-overlay .live-game-editor > button')!.click())
+  await waitFor(() => expect(host.querySelector('.game-history-overlay .live-edit-fields')).not.toBeNull())
+  const teams = (await db.setTeams.toArray()).sort((a, b) => a.sortOrder - b.sortOrder)
+  for (const [index, team] of [[0, teams[1]], [1, teams[2]], [2, teams[2]]] as const) {
+    await act(async () => {
+      const select = host.querySelectorAll<HTMLSelectElement>('.game-history-overlay .live-edit-fields select')[index]
+      select.value = team.id; select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+  await click('Vista lið á vellinum')
+  await waitFor(() => expect(host.querySelector('.game-history-overlay .live-edit-fields')).toBeNull())
+  await click('Loka')
+  await waitFor(() => expect(host.querySelector('.waiting-team')?.textContent).toContain('Rautt'))
+  expect([...host.querySelectorAll('.goal-team-button strong')].map(e => e.textContent)).toEqual([teams[1].name, teams[2].name])
+  expect(await db.games.get(corrected.id)).toEqual(corrected)
+})
+
+it.each([2, 3])('waits for a final-whistle decision and can save a missed goal with %i teams', async teamCount => {
+  await mount(teamCount)
+  // A first goal also establishes a known incumbent in three-team mode.
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt'); await waitFor(() => expect(button('Anna')).toBeDefined())
+  await click('Anna'); await click('Engin')
+  await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
+  await click('STARTA LEIK')
+  await waitFor(() => expect(button('Ⅱ PÁSA')).toBeDefined())
+  const game = (await db.games.toArray()).find(g => g.status === 'live')!
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(Date.parse(game.timerStartedAt!) + 180_000)
+  await waitFor(() => expect(host.textContent).toContain('hver urðu úrslitin?'))
+  expect((await db.games.get(game.id))?.status).toBe('paused')
+  expect(await db.games.count()).toBe(2)
+  await click('Rautt · skrá mark')
+  await click('Anna'); await click('Engin')
+  await waitFor(() => expect(button('STARTA LEIK')).toBeDefined())
+  expect((await db.games.get(game.id))?.endReason).toBe('goal')
+  expect(await db.goals.count()).toBe(2)
+  expect(host.querySelector('[role="timer"]')?.textContent).toBe('03:00')
 })
 
 it('fourth goal resets the scoreboard and Undo restores the winning set transaction', async () => {

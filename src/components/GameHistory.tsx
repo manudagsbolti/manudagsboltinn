@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
 import { pauseGame } from '../data/repository'
+import { LiveGameEditor } from './LiveGameEditor'
 import { readGameHistory, reverseGameCorrection, saveGameEdit, type GameEdit } from '../data/gameHistory'
 import { correctedSet, gamesAfterTarget, historyResult } from '../domain/gameHistory'
 import type { Game, GameHistorySnapshot } from '../domain/types'
@@ -34,6 +35,9 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
   }, [open])
   if (!data?.session || data.backfill) return null
   const session = data.session
+  const liveEditing = session.status === 'live'
+  const latest = data.snapshots.at(-1)
+  const currentGame = latest?.games.at(-1)
   const teamName = (id: string) => data.teams.find(t=>t.id===id)?.name ?? 'Óþekkt lið'
   const playerName = (id: string) => data.players.find(p=>p.id===id)?.name ?? 'Óþekktur leikmaður'
   async function run(action: () => Promise<unknown>) {
@@ -81,7 +85,8 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
       }
     }}><section className="game-history-sheet">
       <header><div><span className="eyebrow">LEIKJASAGA KVÖLDSINS</span><h2 id="game-history-title">Leikir og leiðréttingar</h2></div><button ref={closeButton} disabled={busy} onClick={()=>{reset();setOpen(false)}}>Loka</button></header>
-      <p>Klukkan helst í pásu. Síðari viðureignir og settaskipting haldast við leiðréttingu.</p>
+      <p>Klukkan helst í pásu. Leiðréttu söguna og veldu liðin á vellinum hér ef þarf.</p>
+      {liveEditing && !data.frozen && currentGame && latest?.set.status === 'live' && <LiveGameEditor key={currentGame.id} game={currentGame} teams={data.teams.filter(t => t.setId === currentGame.setId)} mode="teams"/>}
       {data.frozen && <p className="warning-banner">Kvöldið er innsent. Stjórnandi sér um frekari leiðréttingar eftir samþykkt.</p>}
       {error && <p className="warning-banner" role="alert">{error}</p>}
       {edit && snapshot ? <div className="history-editor">
@@ -100,11 +105,11 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
               {!edit.ownGoal && <label>Stoðsending<select value={edit.assistsRecorded===false?'__unknown':edit.assistPlayerId} onChange={e=>setEdit({...edit,assistsRecorded:e.target.value!=='__unknown',assistPlayerId:e.target.value==='__unknown'?'':e.target.value})}><option value="__unknown">Ekki skráð</option><option value="">Engin stoðsending</option>{playersFor(edit.winningTeamId).filter(p=>p.id!==edit.scorerPlayerId).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
             </> : teams.length===3 && <label>Liðið sem fór út<select value={edit.exitingTeamId} onChange={e=>setEdit({...edit,exitingTeamId:e.target.value})}><option value="">Veldu lið</option>{selectedTeams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
           </div>}
-          <label>Ástæða leiðréttingar<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="T.d. mark skráð á rangt lið"/></label>
-          <div className="history-actions"><button disabled={busy} onClick={reset}>Hætta við</button><button className="primary" disabled={busy || !reason.trim() || (!deleting && !valid)} onClick={()=>setConfirm(true)}>Yfirfara breytingu</button></div>
+          <label>Ástæða leiðréttingar{liveEditing ? ' (valfrjálst)' : ''}<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="T.d. mark skráð á rangt lið"/></label>
+          {!liveEditing && <div className="history-actions"><button disabled={busy} onClick={reset}>Hætta við</button><button className="primary" disabled={busy || !reason.trim() || (!deleting && !valid)} onClick={()=>setConfirm(true)}>Yfirfara breytingu</button></div>}
           {edit.gameId && !deleting && <button className="danger-text" onClick={()=>setDeleting(true)}>Fjarlægja þennan leik…</button>}
         </>}
-        {confirm && <div className="history-preview">
+        {(confirm || liveEditing) && <div className="history-preview">
           <h3>{deleting?'Leikurinn verður fjarlægður':'Þetta verður vistað'}</h3>
           {!deleting && <p>{teamName(edit.holderTeamId)} – {teamName(edit.challengerTeamId)} · {edit.result==='timeout'?'Jafntefli':`${teamName(edit.winningTeamId)} vinnur · ${playerName(edit.scorerPlayerId)}${edit.ownGoal?' (sjálfsmark)':''}${edit.assistPlayerId?` · stoð: ${playerName(edit.assistPlayerId)}`:''}`}</p>}
           <p>{reason}</p>
@@ -114,7 +119,7 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
           <p>Síðari leikir halda sínum liðum og úrslitum. Leikjanúmer færast ef leik er bætt inn, hann færður eða fjarlægður.</p>
           {!previewSet?.winningTeamId && snapshot.set.status==='completed' && <p className="warning-banner">Þetta sett hefur ekki lengur næga sigra til að veita settsigur. Það færist ekki saman við næsta sett.</p>}
           {gamesAfterTarget(previewGames,session)>0 && <p className="warning-banner">{gamesAfterTarget(previewGames,session)} leikir eru skráðir eftir að sigurmarki setts var náð. Þeir haldast í þessu setti. Fyrsta liðið sem náði markinu fær settsigurinn.</p>}
-          <div className="history-actions"><button disabled={busy} onClick={()=>setConfirm(false)}>Til baka</button><button className="primary" disabled={busy} onClick={()=>void run(async()=>{await saveGameEdit(sessionId,snapshot,deleting?{deleteGameId:edit.gameId!}:edit,reason);reset()})}>{busy?'Vista…':'Staðfesta breytingu'}</button></div>
+          <div className="history-actions"><button disabled={busy} onClick={()=>liveEditing ? reset() : setConfirm(false)}>{liveEditing ? 'Hætta við' : 'Til baka'}</button><button className="primary" disabled={busy || (!deleting && !valid)} onClick={()=>void run(async()=>{await saveGameEdit(sessionId,snapshot,deleting?{deleteGameId:edit.gameId!}:edit,reason.trim() || 'Leiðrétting í leik');reset()})}>{busy?'Vista…':liveEditing?'Vista breytingu':'Staðfesta breytingu'}</button></div>
         </div>}
       </div> : <>
         {data.snapshots.map(s=><section className="history-set" key={s.set.id}><div className="history-set-heading"><h3>Sett {s.set.setNo} · {s.set.winningTeamId?`${teamName(s.set.winningTeamId)} vann`:'Enginn settsigur'}</h3>{!data.frozen && <button disabled={busy} onClick={()=>choose(s)}>＋ Bæta inn leik</button>}</div>

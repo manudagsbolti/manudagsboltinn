@@ -1,4 +1,5 @@
 import { DeleteNight } from './DeleteNight'
+import { LiveGameEditor } from './LiveGameEditor'
 import { GameHistory } from './GameHistory'
 import { AssistSetting } from './AssistSetting'
 import { NightTeams } from './NightTeams'
@@ -42,6 +43,7 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
   const actionLock = useRef(false)
   const [goalTeamId, setGoalTeamId] = useState<string | null>(null)
   const [choosingOutgoing, setChoosingOutgoing] = useState(false)
+  const [reviewingExpiry, setReviewingExpiry] = useState(false)
   const [tick, setTick] = useState(Date.now())
   const buzzerFor = useRef<string | null>(null)
 
@@ -90,27 +92,37 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
     const key = JSON.stringify([team.sortOrder, ids])
     return [team.id, nightTeams.find(t => t.key === key)?.sets ?? 0]
   }))
+  const nightWins = Object.fromEntries(setTeams.map(team => {
+    const ids = data.memberships.filter(m => m.teamId === team.id).map(m => m.playerId).sort()
+    return [team.id, nightTeams.find(t => t.key === JSON.stringify([team.sortOrder, ids]))?.wins ?? 0]
+  }))
 
   const saveGoal = async (scorerId: string, assistId: string | null, eventType: 'GOAL' | 'OWN_GOAL') => {
     if (!goalTeam) return
-    await recordGoal({ gameId: currentGame.id, teamId: goalTeam.id, scorerPlayerId: scorerId, assistPlayerId: assistId, eventType })
+    await recordGoal({ gameId: currentGame.id, teamId: goalTeam.id, scorerPlayerId: scorerId, assistPlayerId: assistId, eventType, atFinalWhistle: reviewingExpiry })
     setGoalTeamId(null)
+    setReviewingExpiry(false)
   }
 
   const expireGame = async (game: typeof currentGame) => {
-    if (game.waitingTeamId && !game.incumbentTeamId) {
-      void playBuzzer().catch(() => undefined)
-      await pauseGame(game.id)
-      setChoosingOutgoing(true)
-      return
-    }
     void playBuzzer().catch(() => undefined)
-    await timeoutGame(game.id)
+    await pauseGame(game.id)
+    setReviewingExpiry(true)
+  }
+
+  const saveDraw = async () => {
+    if (currentGame.waitingTeamId && !currentGame.incumbentTeamId) {
+      setChoosingOutgoing(true)
+    } else {
+      await timeoutGame(currentGame.id)
+      setReviewingExpiry(false)
+    }
   }
 
   const chooseOutgoing = async (teamId: string) => {
     await timeoutGame(currentGame.id, teamId)
     setChoosingOutgoing(false)
+    setReviewingExpiry(false)
   }
 
   const next = async () => { await createNextGame(currentGame.id) }
@@ -150,12 +162,13 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
     <header className="live-topbar"><button onClick={onBack}>⌄</button><div><span>MÁNUDAGSBOLTINN</span><strong>{new Date(`${session.playedOn}T12:00:00`).toLocaleDateString('is-IS', { day:'numeric', month:'short' })}</strong></div><div className="live-set-pill">SETT {currentSet.setNo}</div></header>
     {error && <p className="warning-banner" role="alert">{error}</p>}
     {previousSet?.status === 'completed' && currentGame.gameNo === 1 && currentGame.status === 'ready' && <p className="set-win-notice">🏆 {data.teams.find(t => t.id === previousSet.winningTeamId)?.name} vann sett {previousSet.setNo}. Nýtt sett er tilbúið.</p>}
-    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet} setWins={setWins} playerNames={Object.fromEntries(players.map(p=>[p.id,p.name]))}/>
+    <SetScoreboard set={currentSet} teams={setTeams} games={setGames} winsPerPoint={session.winsPerPoint} pointsToWinSet={session.pointsToWinSet} setWins={setWins} nightWins={nightWins} playerNames={Object.fromEntries(players.map(p=>[p.id,p.name]))}/>
 
     {currentSet.status !== 'completed' ? <main className="match-stage">
       <div className="game-label">LEIKUR {currentGame.gameNo}</div>
       <div className={`timer ${remaining <= 10 && currentGame.status === 'live' ? 'danger' : ''}`} role="timer" aria-live="off" aria-label={`${Math.ceil(remaining)} sekúndur eftir`}>{formatClock(remaining)}</div>
       <div className={`match-status status-${currentGame.status}`}>{currentGame.status === 'ready' ? 'Tilbúið' : currentGame.status === 'live' ? 'Í gangi' : currentGame.status === 'paused' ? 'Pása' : currentGame.endReason === 'goal' ? 'Mark' : 'Tími'}</div>
+      <LiveGameEditor game={currentGame} teams={setTeams} mode="clock" onSaved={() => { buzzerFor.current = null; setTick(Date.now()) }}/>
       <div className="versus-grid">
         <button className="goal-team-button" style={{ '--team-color': holder.color } as React.CSSProperties} disabled={busy || currentGame.status !== 'live' || remaining <= 0} onClick={() => void run(() => beginGoal(holder.id))}><span className="role">INNI</span><strong>{holder.name}</strong><b>⚽ MARK</b></button>
         <div className="vs">VS</div>
@@ -163,6 +176,7 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
       </div>
       {waiting && <p className="setup-hint">{currentGame.incumbentTeamId ? `${setTeams.find(t => t.id === currentGame.incumbentTeamId)?.name} hefur verið lengur inni` : 'Fyrsti tími: velja þarf liðið sem fer út'}</p>}
       {waiting && <div className="waiting-team"><span className="team-dot" style={{ background: waiting.color }}/><span>Bíður:</span><strong>{waiting.name}</strong></div>}
+      <LiveGameEditor game={currentGame} teams={setTeams} mode="teams"/>
       <div className="match-controls">
         {currentGame.status === 'ready' && <><button className="primary jumbo" disabled={busy} onClick={() => void run(begin)}>STARTA LEIK</button><button className="control-small" onClick={() => void playBuzzer().catch(() => undefined)}>Prófa lokahljóð</button></>}
         {currentGame.status === 'live' && <><button className="control-big" disabled={busy} onClick={() => void run(() => pauseGame(currentGame.id))}>Ⅱ PÁSA</button><button className="control-small" disabled={busy || remaining > 0} onClick={() => void run(() => expireGame(currentGame))}>⏱ TÍMI</button></>}
@@ -191,27 +205,39 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
     {summary.assistsIncomplete && <p className="data-quality-note">Stoðsendingar eru ekki skráðar í öllum leikjum. Tölurnar sýna aðeins skráðar stoðsendingar.</p>}
     <h2>Lið kvöldsins</h2><NightTeams teams={nightTeams}/><p>{summary.draws} jafntefli alls í kvöld.</p>
     <h2>Staða allra leikmanna</h2><div className="summary-table-wrap"><table className="summary-table"><thead><tr><th>Leikmaður</th><th>Sett</th><th>Sigrar</th><th>Jafntefli</th><th>Mörk</th><th>Stoðs.</th></tr></thead><tbody>{summary.players.map(p => <tr key={p.playerId}><th scope="row">{p.name}</th><td>{p.setWins}</td><td>{p.smallWins}</td><td>{p.draws}</td><td>{p.goals}</td><td>{p.assists}</td></tr>)}</tbody></table></div></section>
+    {reviewingExpiry && !goalTeam && !choosingOutgoing && <div className="modal-backdrop timeout-backdrop" role="dialog" aria-modal="true" aria-labelledby="expiry-title"><section className="timeout-choice-sheet">
+      <h2 id="expiry-title">Tíminn rann út · hver urðu úrslitin?</h2>
+      <p>Veldu jafntefli eða skráðu mark sem náðist fyrir lokaflaut. Liðin haldast þar til úrslitin eru skráð.</p>
+      {error && <p role="alert">{error}</p>}
+      <div className="timeout-team-choices">
+        <button disabled={busy} onClick={() => void run(saveDraw)}>Jafntefli · ekkert mark</button>
+        {[holder, challenger].map(team => <button key={team.id} disabled={busy} onClick={() => setGoalTeamId(team.id)}>{team.name} · skrá mark</button>)}
+      </div>
+      <button disabled={busy} onClick={() => setReviewingExpiry(false)}>Til baka · stilla klukku</button>
+    </section></div>}
     {goalTeam && <GoalModal
       team={goalTeam} players={membersForGoalTeam} defendingPlayers={defendingPlayers}
       assistsEnabled={session.assistsEnabled !== false}
       onClose={() => setGoalTeamId(null)} onSave={saveGoal}
     />}
-    {choosingOutgoing && <TimeoutChoiceModal holder={holder} challenger={challenger} onChoose={teamId => void run(() => chooseOutgoing(teamId))} />}
+    {choosingOutgoing && <TimeoutChoiceModal holder={holder} challenger={challenger} busy={busy} error={error} onBack={() => setChoosingOutgoing(false)} onChoose={teamId => void run(() => chooseOutgoing(teamId))} />}
   </section>
 }
 
-function TimeoutChoiceModal({ holder, challenger, onChoose }: { holder: { id: string; name: string; color: string }; challenger: { id: string; name: string; color: string }; onChoose: (teamId: string) => void }) {
+function TimeoutChoiceModal({ holder, challenger, onChoose, busy, error, onBack }: { holder: { id: string; name: string; color: string }; challenger: { id: string; name: string; color: string }; onChoose: (teamId: string) => void; busy: boolean; error: string; onBack: () => void }) {
   return <div className="modal-backdrop timeout-backdrop" role="dialog" aria-modal="true" aria-labelledby="timeout-title">
     <section className="timeout-choice-sheet">
       <div className="modal-grabber" />
       <span className="eyebrow">TÍMINN RANN ÚT</span>
       <h2 id="timeout-title">Hvort liðið fer út?</h2>
+      {error && <p role="alert">{error}</p>}
       <p>Fyrsti leikurinn segir okkur ekki hvort liðið hefur verið lengur inni. Veldu liðið sem yfirgefur völlinn.</p>
       <div className="timeout-team-choices">
-        {[holder, challenger].map(team => <button key={team.id} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => onChoose(team.id)}>
+        {[holder, challenger].map(team => <button disabled={busy} key={team.id} style={{ '--team-color': team.color } as React.CSSProperties} onClick={() => onChoose(team.id)}>
           <span className="team-dot" /><strong>{team.name}</strong><small>FER ÚT</small>
         </button>)}
       </div>
+      <button disabled={busy} onClick={onBack}>Til baka</button>
     </section>
   </div>
 }

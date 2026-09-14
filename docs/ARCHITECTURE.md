@@ -28,6 +28,16 @@ Optimistic snapshot comparison rejects stale editor saves and unsafe reversal.
 
 ## Grunnhugsun
 
+Live expiry pauses locally at zero before a user result decision. Existing game
+status/remaining-time fields carry recovery; no pending result is fabricated.
+Explicit final-whistle goals are accepted only on a paused game and use the
+existing atomic goal/rotation/set/Undo transaction. Clock and current-matchup
+edits use guarded local commands with stale-update checks and the existing outbox;
+they need no new SQL column or Dexie migration. Clock edits retain timestamp-based
+pause/resume behavior. Current-matchup edits invalidate scoring Undo and never
+replay history. Live history keeps the before/after preview on the editing screen
+and supplies a default correction reason when the operator leaves it blank.
+
 Live leikur má aldrei vera háður nettengingu. Notendaaðgerð er vistuð local og UI uppfært strax. Cloud sync er secondary.
 
 ```text

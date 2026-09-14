@@ -142,6 +142,14 @@ If A vs B are on court and A scores:
 
 ### 5.3 Timeout with 3 teams
 
+Live workflow update (September 2026): at 00:00 sound the buzzer and persist
+the current game as PAUSED at zero. Do not complete it, award a result or rotate
+until the operator selects a draw or records a goal scored before the whistle.
+The goal option uses normal scorer/optional-assist/own-goal recording. A draw
+uses the existing rotation rules below, asking for an outgoing team only when
+the incumbent is unknown. This review also applies in two-team mode. Reload
+preserves the paused zero-time game; the operator reopens the decision via TÍMI.
+
 If 03:00 expires without a goal:
 
 - No team receives a mini-game win.
@@ -203,6 +211,11 @@ Pause is a normal live feature. Injuries, stuck balls, discussion, etc. happen r
 Pause must freeze the remaining time exactly and may be used repeatedly.
 
 ### 6.2 Buzzer
+
+The live clock has a two-step edit: open “Stilla klukku” (pauses running play),
+then enter remaining seconds and explicitly confirm the displayed time. Accept
+whole seconds from 1 through the configured game duration. Cancel preserves
+the paused time; saving never starts or resumes play automatically.
 
 At 00:00 play a clearly audible end-of-game buzzer/horn.
 
@@ -275,7 +288,10 @@ Confirmed September 2026: a full-night game history is available during live
 recording and in the summary. Pause the running timer before opening it. Edit
 individual completed games (teams, result, scorer, assist, own goal), reorder
 within their set, insert missing games or remove erroneous games. Show a
-before/after wins and set-winner preview and require a reason and confirmation.
+before/after wins and set-winner preview. During live recording show the preview
+alongside the editor and save with one action; the reason is optional and defaults
+to “Leiðrétting í leik”. Completed-night corrections retain reason and separate
+confirmation requirements.
 Preserve later matchups and set boundaries as actually played; never replay
 rotation or move games automatically after a historical correction. Derive the
 set winner as the first team to reach the configured target in recorded order.
@@ -283,6 +299,11 @@ A closed older set without enough wins awards no winner, even though its boundar
 remains closed. Extra recorded games after the target remain facts. A correction
 that would close the current set must wait for an already-started game to finish.
 An unstarted next matchup stays as prepared, including when starting the next set.
+Operators can explicitly edit the current matchup from the live screen or history:
+pause first, select two distinct teams and the known incumbent (or unknown).
+The remaining team waits; two-team mode has no waiting team or incumbent.
+Save changes only the current READY/PAUSED game, preserves the clock and all
+completed games, and clears the old scoring Undo. It never starts the clock.
 Store before/after facts and a reason/time as app correction history. Permit
 reversal of the latest correction only while its affected set and last-set ID
 remain unchanged. Invalidate the old live Undo on corrections. Shared recorders
@@ -302,6 +323,8 @@ Priorities:
 - very large Goal A / Goal B buttons
 - large Pause/Resume action
 - minimal distractions
+- small captain name/badge; prominent current-set score and numeric totals for
+  sets and mini-game wins tonight, derived for each current roster
 - high contrast
 - touch targets usable quickly with sweaty hands
 
