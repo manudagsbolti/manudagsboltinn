@@ -68,6 +68,8 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
   const previewSet = snapshot ? correctedSet(snapshot.set, previewGames, session, data.snapshots.at(-1)?.set.id!==snapshot.set.id || session.status==='completed') : null
   const wins = (games: Game[], id: string) => games.filter(g=>g.status==='completed' && g.winningTeamId===id).length
   const valid = !!edit && edit.holderTeamId!==edit.challengerTeamId && (edit.result==='timeout' ? teams.length===2 || selectedTeams.some(t=>t.id===edit.exitingTeamId) : selectedTeams.some(t=>t.id===edit.winningTeamId) && playersFor(scorerTeam).some(p=>p.id===edit.scorerPlayerId))
+  const latestCompleted = data.snapshots.flatMap(s => s.games).filter(g => g.status === 'completed').at(-1)
+  const repairsLive = liveEditing && !deleting && edit?.gameId === latestCompleted?.id && edit?.position === latestCompleted?.gameNo
   const reset = () => { setEdit(null); setSnapshot(null); setConfirm(false); setError('') }
   return <>
     <button ref={opener} className="history-open" disabled={busy} onClick={()=>void run(async()=>{
@@ -85,7 +87,7 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
       }
     }}><section className="game-history-sheet">
       <header><div><span className="eyebrow">LEIKJASAGA KVÖLDSINS</span><h2 id="game-history-title">Leikir og leiðréttingar</h2></div><button ref={closeButton} disabled={busy} onClick={()=>{reset();setOpen(false)}}>Loka</button></header>
-      <p>Klukkan helst í pásu. Leiðréttu söguna og veldu liðin á vellinum hér ef þarf.</p>
+      <p>Klukkan helst í pásu. Leiðrétting á síðasta leik uppfærir næstu viðureign. Eldri leiðréttingar breyta ekki liðunum á vellinum.</p>
       {liveEditing && !data.frozen && currentGame && latest?.set.status === 'live' && <LiveGameEditor key={currentGame.id} game={currentGame} teams={data.teams.filter(t => t.setId === currentGame.setId)} mode="teams"/>}
       {data.frozen && <p className="warning-banner">Kvöldið er innsent. Stjórnandi sér um frekari leiðréttingar eftir samþykkt.</p>}
       {error && <p className="warning-banner" role="alert">{error}</p>}
@@ -116,8 +118,8 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
           {!deleting && edit.result==='goal' && !edit.ownGoal && edit.assistsRecorded===false && <p>Stoðsending: ekki skráð.</p>}
           <table><thead><tr><th>Lið</th><th>Sigrar áður</th><th>Sigrar eftir</th></tr></thead><tbody>{teams.map(t=><tr key={t.id}><th>{t.name}</th><td>{wins(snapshot.games,t.id)}</td><td>{wins(previewGames,t.id)}</td></tr>)}</tbody></table>
           <p>Settsigur: {snapshot.set.winningTeamId?teamName(snapshot.set.winningTeamId):'Enginn'} → <strong>{previewSet?.winningTeamId?teamName(previewSet.winningTeamId):'Enginn'}</strong>.</p>
-          <p>Síðari leikir halda sínum liðum og úrslitum. Leikjanúmer færast ef leik er bætt inn, hann færður eða fjarlægður.</p>
-          {!previewSet?.winningTeamId && snapshot.set.status==='completed' && <p className="warning-banner">Þetta sett hefur ekki lengur næga sigra til að veita settsigur. Það færist ekki saman við næsta sett.</p>}
+          <p>{repairsLive ? 'Næsta viðureign og liðið sem bíður uppfærast samkvæmt leiðréttum úrslitum. Tími helst óbreyttur og klukkan fer ekki sjálfkrafa af stað.' : 'Síðari leikir halda sínum liðum og úrslitum. Leikjanúmer færast ef leik er bætt inn, hann færður eða fjarlægður.'}</p>
+          {!previewSet?.winningTeamId && snapshot.set.status==='completed' && <p className="warning-banner">{repairsLive ? 'Ef næsta sett hefur engan lokinn leik og sömu lið heldur þetta sett áfram án settsigurs.' : 'Þetta sett hefur ekki lengur næga sigra til að veita settsigur. Það færist ekki saman við næsta sett.'}</p>}
           {gamesAfterTarget(previewGames,session)>0 && <p className="warning-banner">{gamesAfterTarget(previewGames,session)} leikir eru skráðir eftir að sigurmarki setts var náð. Þeir haldast í þessu setti. Fyrsta liðið sem náði markinu fær settsigurinn.</p>}
           <div className="history-actions"><button disabled={busy} onClick={()=>liveEditing ? reset() : setConfirm(false)}>{liveEditing ? 'Hætta við' : 'Til baka'}</button><button className="primary" disabled={busy || (!deleting && !valid)} onClick={()=>void run(async()=>{await saveGameEdit(sessionId,snapshot,deleting?{deleteGameId:edit.gameId!}:edit,reason.trim() || 'Leiðrétting í leik');reset()})}>{busy?'Vista…':liveEditing?'Vista breytingu':'Staðfesta breytingu'}</button></div>
         </div>}

@@ -351,6 +351,7 @@ describe('persisted V1 game engine', () => {
   })
   it('four wins close exactly one set and prepare a zero-score set with court continuity', async () => {
     const { session, set } = await setup()
+    const originalTeams = await db.setTeams.where('setId').equals(set.id).sortBy('sortOrder')
     for (let n = 0; n < 3; n++) await score(session.id)
     expect(await db.sets.get(set.id)).toMatchObject({ status: 'live', winningTeamId: null })
     await score(session.id)
@@ -358,8 +359,21 @@ describe('persisted V1 game engine', () => {
     expect(sets.map(s => s.status)).toEqual(['completed', 'live'])
     const game = await latest(session.id)
     const teams = await db.setTeams.where('setId').equals(game.setId).sortBy('sortOrder')
+    expect(teams.map(team => team.captainPlayerId)).toEqual(originalTeams.map(team => team.captainPlayerId))
     expect(game).toMatchObject({ status: 'ready', remainingSeconds: 180, holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: teams[2].id, incumbentTeamId: teams[0].id })
     expect(getSetWinner([game], teams, session)).toBeNull()
+  })
+  it('keeps captains for unchanged teams when a new set is created explicitly', async () => {
+    const { session, set } = await setup()
+    const originalTeams = await db.setTeams.where('setId').equals(set.id).sortBy('sortOrder')
+    await db.sets.update(set.id, { status: 'completed' })
+    const drafts = await Promise.all(originalTeams.map(async team => ({
+      name: team.name, color: team.color,
+      playerIds: (await db.setTeamMembers.where('teamId').equals(team.id).toArray()).map(member => member.playerId),
+    })))
+    const nextSet = await createSet(session.id, drafts)
+    const nextTeams = await db.setTeams.where('setId').equals(nextSet.id).sortBy('sortOrder')
+    expect(nextTeams.map(team => team.captainPlayerId)).toEqual(originalTeams.map(team => team.captainPlayerId))
   })
   it('undo reverses the fourth goal, assist, set win and prepared next set after reopening DB', async () => {
     const { session, set } = await setup()

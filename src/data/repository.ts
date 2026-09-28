@@ -150,27 +150,32 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder
   validateTeams(teamDrafts, (await db.sessionPlayers.where('sessionId').equals(sessionId).toArray()).map(p => p.playerId))
   const existing = await db.sets.where('sessionId').equals(sessionId).sortBy('setNo')
   if (existing.some(s => s.status !== 'completed')) throw new Error('Klára þarf núverandi sett fyrst.')
+  const previousSet = existing.at(-1)
+  const previousTeams = previousSet ? await db.setTeams.where('setId').equals(previousSet.id).sortBy('sortOrder') : []
+  const previousMembers = previousSet ? await db.setTeamMembers.where('setId').equals(previousSet.id).toArray() : []
   const now = nowIso()
   const set: SetRecord = {
     id: id(), sessionId, setNo: existing.length + 1, status: 'live', winningTeamId: null,
     startedAt: now, endedAt: null, createdAt: now, updatedAt: now,
   }
   const teams: SetTeam[] = teamDrafts.map((draft, index) => {
-    const captainPlayerId = draft.captainPlayerId ?? randomCaptain(draft.playerIds)
+    const previousTeam = previousTeams[index]
+    const sameMembers = previousTeam && draft.playerIds.length === previousMembers.filter(member => member.teamId === previousTeam.id).length
+      && draft.playerIds.every(playerId => previousMembers.some(member => member.teamId === previousTeam.id && member.playerId === playerId))
+    const captainPlayerId = (sameMembers && previousTeam.captainPlayerId) || draft.captainPlayerId || randomCaptain(draft.playerIds)
     if (!draft.playerIds.includes(captainPlayerId)) throw new Error('Fyrirliði þarf að vera í liðinu.')
     return { id: id(), setId: set.id, name: draft.name, color: draft.color, sortOrder: index, captainPlayerId }
   })
   const members: SetTeamMember[] = teams.flatMap((team, index) => teamDrafts[index].playerIds.map((playerId) => ({ setId: set.id, teamId: team.id, playerId })))
   let initial: Rotation = { holderTeamId: teams[0].id, challengerTeamId: teams[1].id, waitingTeamId: teams[2]?.id ?? null }
   let incumbentTeamId: UUID | null = null
-  const previousSet = existing.at(-1)
+  let carriedClock: Pick<Game, 'status' | 'remainingSeconds' | 'startedAt'> | undefined
   if (openingOrder) {
     initial = { holderTeamId: teams[openingOrder[0]].id, challengerTeamId: teams[openingOrder[1]].id, waitingTeamId: openingOrder[2] === undefined ? null : teams[openingOrder[2]].id }
   } else if (previousSet) {
-    const previousTeams = await db.setTeams.where('setId').equals(previousSet.id).sortBy('sortOrder')
     const previousGames = await db.games.where('setId').equals(previousSet.id).sortBy('gameNo')
     const lastGame = previousGames.at(-1)
-    if (lastGame && ['completed', 'ready'].includes(lastGame.status)) {
+    if (lastGame && ['completed', 'ready', 'paused'].includes(lastGame.status)) {
       // A historical correction may close a set with a prepared matchup.
       // Preserve that explicit matchup instead of resetting court continuity.
       const rotation = lastGame.status === 'completed' ? nextRotation(lastGame) : lastGame
@@ -180,9 +185,10 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder
         challengerTeamId: map.get(rotation.challengerTeamId) ?? teams[1].id,
         waitingTeamId: rotation.waitingTeamId ? map.get(rotation.waitingTeamId) ?? null : null,
       }
-      incumbentTeamId = initial.waitingTeamId ? lastGame.status === 'ready'
+      incumbentTeamId = initial.waitingTeamId ? lastGame.status !== 'completed'
         ? lastGame.incumbentTeamId ? map.get(lastGame.incumbentTeamId) ?? null : null
         : initial.holderTeamId : null
+      if (lastGame.status === 'paused') carriedClock = { status: 'paused', remainingSeconds: lastGame.remainingSeconds, startedAt: lastGame.startedAt }
     }
   }
   const game: Game = {
@@ -191,6 +197,7 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder
     status: 'ready', durationSeconds: session.gameDurationSeconds,
     remainingSeconds: session.gameDurationSeconds, timerStartedAt: null, startedAt: null, endedAt: null,
     endReason: null, winningTeamId: null, exitingTeamId: null, createdAt: now, updatedAt: now,
+    ...carriedClock,
   }
   await db.transaction('rw', db.sets, db.setTeams, db.setTeamMembers, db.games, db.sessions, async () => {
     await db.sets.add(set)

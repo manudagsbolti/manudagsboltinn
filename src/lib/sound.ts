@@ -41,3 +41,24 @@ export async function playBuzzer() {
   }
   if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 400])
 }
+
+export async function playCountdownWhistle() {
+  const ctx = getContext()
+  if (ctx.state === 'suspended') await ctx.resume()
+  const start = ctx.currentTime
+  for (const frequency of [2800, 2920]) {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(frequency - 120, start)
+    osc.frequency.linearRampToValueAtTime(frequency, start + 0.035)
+    gain.gain.setValueAtTime(0.0001, start)
+    gain.gain.exponentialRampToValueAtTime(0.22, start + 0.015)
+    gain.gain.setValueAtTime(0.22, start + 0.14)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18)
+    osc.connect(gain).connect(ctx.destination)
+    osc.onended = () => { osc.disconnect(); gain.disconnect() }
+    osc.start(start)
+    osc.stop(start + 0.19)
+  }
+}

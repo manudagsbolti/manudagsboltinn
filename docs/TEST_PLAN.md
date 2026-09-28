@@ -4,7 +4,8 @@
 
 - Captains: one randomly chosen member per team, independent of team draw mode.
   Verify C badges in setup/live, persistence through submission approval, and
-  database rejection of captains outside their team. Subsequent sets draw again;
+  database rejection of captains outside their team. Subsequent sets with the
+  same team members retain captains; changed teams draw again;
   reloads retain saved captains. Check long captain names on a narrow phone.
 
 - Disable assist recording: choosing a normal scorer immediately saves one goal
@@ -18,6 +19,11 @@
   scorers/assists, running timers and frozen submissions. Roll back facts and
   outbox together on failure. SQL tests verify immediate numbering constraints,
   active-goal uniqueness, audit sync and idempotent receipt retries.
+- Correct the latest winner in two/three-team mode: repair the immediate READY
+  or PAUSED matchup and incumbent without changing remaining time or starting it.
+  Correct a fourth win: reopen the previous set if the target is no longer met,
+  or repair the following set if it is; reverse the correction across both sets.
+  Once another game has finished, older corrections must leave live play alone.
 - Phone acceptance: open Leikir og leiðréttingar during play, verify pause,
   preview a correction, cancel with no changes, confirm and continue manually.
   Repeat offline and inspect the corrected night after syncing on another device.

@@ -1,4 +1,14 @@
 import type { Game, Goal, SetRecord, Session } from './types'
+import { nextRotation } from './matchMachine'
+
+// Only the immediate successor is repaired; completed history is never replayed.
+export function correctedSuccessor(previous: Game, upcoming: Game, now: string): Game {
+  const rotation = nextRotation(previous)
+  const incumbentTeamId = rotation.waitingTeamId ? rotation.holderTeamId : null
+  if (upcoming.holderTeamId === rotation.holderTeamId && upcoming.challengerTeamId === rotation.challengerTeamId
+    && upcoming.waitingTeamId === rotation.waitingTeamId && upcoming.incumbentTeamId === incumbentTeamId) return upcoming
+  return { ...upcoming, ...rotation, incumbentTeamId, updatedAt: now }
+}
 
 // Corrections preserve recorded matchups and set boundaries. First to the
 // configured target in recorded game order wins; later facts are not replayed.

@@ -119,6 +119,34 @@ it('syncs correction numbering and reversal atomically, with audit history and r
   const denied=await asUser('select public.apply_sync_batch($1::jsonb) result',['[]']).catch(e=>e)
   expect(denied).toBeInstanceOf(Error)
 })
+it('syncs reopening a mistaken fourth win and restores the provisional set on reversal', async () => {
+  localStorage.setItem('manudagsboltinn-access', JSON.stringify({ userId: admin, role: 'admin' }))
+  const players = []
+  for (const name of ['A','B','C']) players.push(await addPlayer(name))
+  const session = await createSession({ playedOn:'2026-09-07',playerIds:players.map(p=>p.id),gameDurationSeconds:180,winsPerPoint:1,pointsToWinSet:4 })
+  const set = await createSet(session.id,players.map(p=>({name:p.name,color:'blue',playerIds:[p.id]})))
+  for(let i=0;i<4;i++) {
+    const game=(await readGameHistory(set.id)).games.at(-1)!
+    await startGame(game.id)
+    await recordGoal({gameId:game.id,teamId:game.holderTeamId,scorerPlayerId:players[0].id})
+  }
+  const send = async () => {
+    const ops=(await db.syncQueue.orderBy('createdAt').toArray()).map(row=>toSnakeCase({id:row.id,table:row.table,entityId:row.entityId,operation:row.operation,payload:row.payload}))
+    await asUser('select public.apply_sync_batch($1::jsonb) result',[JSON.stringify(ops)],admin)
+    await db.syncQueue.clear()
+  }
+  await send()
+  const before=await readGameHistory(set.id), last=before.games.at(-1)!
+  const member=await db.setTeamMembers.where('teamId').equals(last.challengerTeamId).first()
+  await saveGameEdit(session.id,before,{gameId:last.id,position:last.gameNo,holderTeamId:last.holderTeamId,challengerTeamId:last.challengerTeamId,result:'goal',winningTeamId:last.challengerTeamId,scorerPlayerId:member!.playerId,assistPlayerId:'',ownGoal:false,exitingTeamId:''},'Wrong fourth win')
+  await send()
+  expect((await pg.query('select status,winning_team_id from public.sets where session_id=$1',[session.id])).rows).toEqual([{status:'live',winning_team_id:null}])
+  await reverseGameCorrection(session.id,(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!.id)
+  await send()
+  expect((await pg.query('select count(*)::int n from public.sets where session_id=$1',[session.id])).rows[0]).toEqual({n:2})
+  expect(await readGameHistory(set.id)).toEqual(before)
+})
+
 it('syncs draft attendance removal and addition without recreating the night', async () => {
   localStorage.setItem('manudagsboltinn-access', JSON.stringify({ userId: admin, role: 'admin' }))
   const players = []

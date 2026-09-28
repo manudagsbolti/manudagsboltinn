@@ -119,7 +119,7 @@ async function mount(teamCount = 2) {
   return {session,onFinish}
 }
 
-it('opens history in a pause and confirms an older result correction without altering the next matchup', async () => {
+it('opens history in a pause and keeps the same two-team matchup after a result correction', async () => {
   const {session}=await mount()
   await click('STARTA LEIK')
   await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
@@ -151,6 +151,37 @@ it('opens history in a pause and confirms an older result correction without alt
   expect((await db.sessions.get(session.id))?.gameCorrections).toHaveLength(1)
   await click('Loka')
   expect(button('▶ HALDA ÁFRAM')).toBeDefined()
+})
+
+it('corrects the last winner through history and shows the repaired three-team lineup', async () => {
+  await mount(3)
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Rautt')
+  await waitFor(()=>expect(button('Anna')).toBeDefined())
+  await click('Anna'); await click('Engin')
+  await waitFor(()=>expect(button('STARTA LEIK')).toBeDefined())
+  await click('STARTA LEIK')
+  await waitFor(()=>expect(button('Ⅱ PÁSA')).toBeDefined())
+  await click('Leikir og leiðréttingar')
+  await waitFor(()=>expect(host.querySelector('.game-history-overlay')).not.toBeNull())
+  const paused=(await db.games.toArray()).find(g=>g.status==='paused')!
+  const teams=await db.setTeams.where('setId').equals(paused.setId).sortBy('sortOrder')
+  const scorer=(await db.players.toArray()).find(p=>p.name==='Bára')!
+  await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click())
+  const select = async(label:string,value:string)=>act(async()=>{
+    const node=[...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s=>s.parentElement?.textContent?.startsWith(label))!
+    node.value=value; node.dispatchEvent(new Event('change',{bubbles:true}))
+  })
+  await select('Sigurlið',teams[1].id)
+  await select('Markaskorari',scorer.id)
+  await click('Vista breytingu')
+  await waitFor(()=>expect(host.querySelector('.history-editor')).toBeNull())
+  await click('Loka')
+  await waitFor(()=>expect(button('▶ HALDA ÁFRAM')).toBeDefined())
+  expect(await db.games.get(paused.id)).toMatchObject({holderTeamId:teams[1].id,challengerTeamId:teams[2].id,waitingTeamId:teams[0].id,incumbentTeamId:teams[1].id,status:'paused',remainingSeconds:paused.remainingSeconds})
+  expect(host.querySelector('.match-stage')?.textContent).toContain('Blátt')
+  expect(host.querySelector('.match-stage')?.textContent).toContain('Gult')
 })
 
 it('pauses before scorer selection, saves assist, shows READY, then finishes into a complete summary', async () => {

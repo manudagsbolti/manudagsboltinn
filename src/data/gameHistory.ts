@@ -1,6 +1,6 @@
 import { db } from '../db/localDb'
-import type { Game, GameHistorySnapshot, Goal, Session } from '../domain/types'
-import { correctedSet } from '../domain/gameHistory'
+import type { Game, GameCorrection, GameHistorySnapshot, Goal, Session } from '../domain/types'
+import { correctedSet, correctedSuccessor } from '../domain/gameHistory'
 import { validateGoal } from '../domain/validation'
 import { enqueueSync, flushSyncQueue } from '../services/syncQueue'
 import { sameRows } from '../services/syncData'
@@ -40,6 +40,27 @@ async function editable(sessionId: string) {
 }
 async function put(table: Parameters<typeof enqueueSync>[0]['table'], entityId: string, payload: unknown) {
   await enqueueSync({ id: id(), table, entityId, payload, operation: 'upsert', createdAt: nowIso() })
+}
+
+async function removeFollowingSet(snapshot: GameHistorySnapshot) {
+  for (const game of snapshot.games) {
+    await db.goals.where('gameId').equals(game.id).delete()
+    await db.timerEvents.where('gameId').equals(game.id).delete()
+    await db.games.delete(game.id)
+  }
+  await db.setTeamMembers.where('setId').equals(snapshot.set.id).delete()
+  await db.setTeams.where('setId').equals(snapshot.set.id).delete()
+  await db.sets.delete(snapshot.set.id)
+  await enqueueSync({ id: id(), table: 'sets', entityId: snapshot.set.id, payload: null, operation: 'delete', createdAt: nowIso() })
+}
+
+async function restoreFollowingSet(change: NonNullable<GameCorrection['followingSet']>) {
+  await db.sets.put(change.before.set); await put('sets', change.before.set.id, change.before.set)
+  for (const team of change.teams) { await db.setTeams.put(team); await put('set_teams', team.id, team) }
+  for (const member of change.members) {
+    await db.setTeamMembers.put(member); await put('set_team_members', `${member.teamId}:${member.playerId}`, member)
+  }
+  await persist({ ...change.before, games: [], goals: [], timerEvents: [] }, change.before)
 }
 
 // Move existing rows above both number ranges before final numbering. PostgreSQL
@@ -110,10 +131,62 @@ export async function saveGameEdit(sessionId: string, expected: GameHistorySnaps
     after.goals.sort((a,b) => a.id.localeCompare(b.id))
     const closed = sets.at(-1)?.id !== before.set.id || session.status === 'completed'
     after.set = { ...correctedSet(before.set, after.games, session, closed), updatedAt: now }
-    if (!closed && after.set.winningTeamId && after.games.some(g => g.status !== 'completed' && g.startedAt)) throw new Error('Breytingin myndi ljúka settinu. Ljúktu yfirstandandi leik fyrst og opnaðu svo leiðréttinguna aftur.')
+    let followingSet: GameCorrection['followingSet']
+    let repairedLatest = false
+    // Repair only an in-place edit of the most recently completed game.
+    // Earlier edits, inserts and reordering retain the recorded chronology.
+    const previous = before.games.filter(g => g.status === 'completed').at(-1)
+    const corrected = previous && after.games.find(g => g.id === previous.id)
+    if (session.status === 'live' && !('deleteGameId' in edit) && previous && corrected
+      && edit.gameId === previous.id && edit.position === previous.gameNo) {
+      const setIndex = sets.findIndex(s => s.id === before.set.id)
+      const nextSet = sets[setIndex + 1]
+      if (!nextSet) {
+        repairedLatest = true
+        after.games = after.games.map(g => g.status !== 'completed' ? correctedSuccessor(corrected, g, now) : g)
+      } else if (setIndex === sets.length - 2) {
+        const next = await readGameHistory(nextSet.id)
+        if (next.games.length === 1 && next.games[0].status !== 'completed') {
+          const teams = await db.setTeams.where('setId').equals(nextSet.id).sortBy('sortOrder')
+          const members = await db.setTeamMembers.where('setId').equals(nextSet.id).toArray()
+          const oldTeams = await db.setTeams.where('setId').equals(before.set.id).toArray()
+          const oldMembers = await db.setTeamMembers.where('setId').equals(before.set.id).toArray()
+          const mapping = new Map(oldTeams.map(team => {
+            const ids = oldMembers.filter(m => m.teamId === team.id).map(m => m.playerId)
+            const match = teams.find(t => {
+              const other = members.filter(m => m.teamId === t.id)
+              return ids.length === other.length && other.every(m => ids.includes(m.playerId))
+            })
+            return [team.id, match?.id]
+          }))
+          if (oldTeams.length === teams.length && [...mapping.values()].every(Boolean)) {
+            followingSet = { before: next, after: structuredClone(next), teams, members }
+            const repaired = correctedSuccessor(corrected, next.games[0], now)
+            after.set = { ...correctedSet(before.set, after.games, session, false), updatedAt: now }
+            if (!after.set.winningTeamId) {
+              // The fourth win was mistaken: discard the unused set and resume this one.
+              after.set.endedAt = null
+              const gameId = id()
+              after.games.push({ ...repaired, id: gameId, setId: before.set.id, gameNo: after.games.length + 1 })
+              after.timerEvents.push(...next.timerEvents.map(event => ({ ...event, id: id(), gameId })))
+              after.timerEvents.sort((a,b) => a.id.localeCompare(b.id))
+              followingSet.after = null
+              await removeFollowingSet(next)
+            } else {
+              followingSet.after!.games = [{ ...repaired,
+                holderTeamId: mapping.get(repaired.holderTeamId)!, challengerTeamId: mapping.get(repaired.challengerTeamId)!,
+                waitingTeamId: repaired.waitingTeamId ? mapping.get(repaired.waitingTeamId)! : null,
+                incumbentTeamId: repaired.incumbentTeamId ? mapping.get(repaired.incumbentTeamId)! : null }]
+              await persist(next, followingSet.after!)
+            }
+          }
+        }
+      }
+    }
+    if (!closed && !repairedLatest && after.set.winningTeamId && after.games.some(g => g.status !== 'completed' && g.startedAt)) throw new Error('Breytingin myndi ljúka settinu. Ljúktu yfirstandandi leik fyrst og opnaðu svo leiðréttinguna aftur.')
     await persist(before, after)
     await db.undoActions.where('sessionId').equals(sessionId).delete()
-    const updated: Session = { ...session, updatedAt: now, gameCorrections: [...(session.gameCorrections ?? []), { id: id(), createdAt: now, reason: reason.trim(), description, lastSetId: sets.at(-1)!.id, before, after }] }
+    const updated: Session = { ...session, updatedAt: now, gameCorrections: [...(session.gameCorrections ?? []), { id: id(), createdAt: now, reason: reason.trim(), description, lastSetId: followingSet?.after === null ? before.set.id : sets.at(-1)!.id, before, after, followingSet }] }
     await db.sessions.put(updated); await put('sessions', sessionId, updated)
   })
   void flushSyncQueue().catch(() => undefined)
@@ -126,6 +199,9 @@ export async function reverseGameCorrection(sessionId: string, correctionId: str
     if (!action || action.id !== correctionId) throw new Error('Aðeins er hægt að afturkalla nýjustu leiðréttinguna.')
     const current = await readGameHistory(action.after.set.id)
     if (sets.at(-1)?.id !== action.lastSetId || !sameRows([current], [action.after])) throw new Error('Ný skráning hefur bæst við. Leiðréttu leikinn sérstaklega til að varðveita hana.')
+    const following = action.followingSet
+    const expectedFollowing = following?.reversed ? following.before : following?.after
+    if (expectedFollowing && !sameRows([await readGameHistory(expectedFollowing.set.id)], [expectedFollowing])) throw new Error('Ný skráning hefur bæst við. Leiðréttu leikinn sérstaklega til að varðveita hana.')
     const now = nowIso()
     // Keep newly created inactive goal rows, so the actual restored snapshot
     // remains comparable after a subsequent correction or cloud round trip.
@@ -151,8 +227,16 @@ export async function reverseGameCorrection(sessionId: string, correctionId: str
     for (const goal of current.goals) if (restored.games.some(g => g.id === goal.gameId) && !restored.goals.some(g => g.id === goal.id)) restored.goals.push({ ...goal, deletedAt: now, updatedAt: now })
     restored.goals.sort((a,b) => a.id.localeCompare(b.id))
     await persist(current, restored)
+    if (following) {
+      if (following.reversed) {
+        if (following.after) await persist(following.before, following.after)
+        else await removeFollowingSet(following.before)
+      } else if (following.after) await persist(following.after, following.before)
+      else await restoreFollowingSet(following)
+    }
     await db.undoActions.where('sessionId').equals(sessionId).delete()
-    const updated = { ...session, updatedAt: now, gameCorrections: [...session.gameCorrections!, { id: id(), createdAt: now, reason: 'Afturköllun leiðréttingar', description: `Afturkallað: ${action.description}`, lastSetId: action.lastSetId, before: current, after: restored, reversesId: action.id }] }
+    const lastSetId = following ? following.reversed && !following.after ? restored.set.id : following.before.set.id : action.lastSetId
+    const updated = { ...session, updatedAt: now, gameCorrections: [...session.gameCorrections!, { id: id(), createdAt: now, reason: 'Afturköllun leiðréttingar', description: `Afturkallað: ${action.description}`, lastSetId, before: current, after: restored, followingSet: following ? { ...following, reversed: !following.reversed } : undefined, reversesId: action.id }] }
     await db.sessions.put(updated); await put('sessions', sessionId, updated)
   })
   void flushSyncQueue().catch(() => undefined)

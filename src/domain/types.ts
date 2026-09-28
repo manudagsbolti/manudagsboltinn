@@ -67,6 +67,7 @@ export interface GameCorrection {
   lastSetId: UUID
   before: GameHistorySnapshot
   after: GameHistorySnapshot
+  followingSet?: { before: GameHistorySnapshot; after: GameHistorySnapshot | null; teams: SetTeam[]; members: SetTeamMember[]; reversed?: boolean }
   reversesId?: UUID
 }
 
