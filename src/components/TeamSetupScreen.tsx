@@ -137,7 +137,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       <div className="split-toolbar"><button disabled={shuffling} onClick={()=>{setStage('roster')}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>
       {shuffling ? <div className="shuffle-stage card"><div className="shuffle-orb">⤨</div><h2>Drögum í lið…</h2><div className="shuffle-names">{players.slice(0,6).map((p,i)=><span key={p.id} style={{animationDelay:`${i*70}ms`}}>{p.name}</span>)}</div></div> : <>
         <p className="setup-hint">Liðin eru tillaga. Þú getur fært leikmann handvirkt með litapunktunum áður en settið hefst.</p>
-        <p className="setup-hint"><CaptainBadge/> Fyrirliðar eru dregnir af handahófi fyrir hvert sett. Ef hópum er breytt er dregið aftur.</p>
+        <p className="setup-hint"><CaptainBadge/> Fyrirliðar haldast hjá óbreyttum liðum milli setta. Ef hópum er breytt er dregið aftur.</p>
         <p className="setup-hint">Veldu lit við hvert lið. Litaskipti halda leikmönnum og fyrirliðum saman. Veldu síðan hvaða lið byrja inni hér fyrir neðan.</p>
         <div className={`team-setup-grid cols-${teamCount}`}>
           {teams.map((team, teamIndex) => <section className="team-column card" key={teamIndex} style={{ '--team-color': team.color } as React.CSSProperties}>

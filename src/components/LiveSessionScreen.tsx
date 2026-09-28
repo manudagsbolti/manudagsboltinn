@@ -10,7 +10,7 @@ import { completeSession, createNextGame, createSet, pauseGame, recordGoal, reco
 import { buildSetTeamStats, currentRemainingSeconds, formatClock } from '../domain/rules'
 import { NightSets } from './NightSets'
 import { buildSessionSummary } from '../services/sessionSummary'
-import { playBuzzer, unlockAudio } from '../lib/sound'
+import { playBuzzer, playCountdownWhistle, unlockAudio } from '../lib/sound'
 import { GoalModal } from './GoalModal'
 import { SetScoreboard } from './SetScoreboard'
 import { releaseWakeLock, requestWakeLock } from '../lib/wakelock'
@@ -65,9 +65,19 @@ export function LiveSessionScreen({ sessionId, onReshuffle, onFinish, onBack }: 
 
   useEffect(() => {
     if (currentGame?.status !== 'live') return
-    const timer = window.setInterval(() => setTick(Date.now()), 250)
+    let previous = currentRemainingSeconds(currentGame, Date.now())
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      const seconds = currentRemainingSeconds(currentGame, now)
+      const threshold = seconds <= 30 && seconds > 29 ? 30 : seconds <= 10 && seconds > 0 ? Math.ceil(seconds) : null
+      if (threshold !== null && previous > threshold && seconds <= threshold) {
+        void playCountdownWhistle().catch(() => undefined)
+      }
+      previous = seconds
+      setTick(now)
+    }, 250)
     return () => window.clearInterval(timer)
-  }, [currentGame?.id, currentGame?.status])
+  }, [currentGame?.id, currentGame?.status, currentGame?.timerStartedAt])
 
   useEffect(() => {
     if (!recovered || !currentGame || currentGame.status !== 'live' || remaining > 0 || buzzerFor.current === currentGame.id || goalTeamId || actionLock.current) return

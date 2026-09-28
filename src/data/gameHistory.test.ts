@@ -27,6 +27,85 @@ async function fixture(count=3, teamCount=3) {
 function timeout(game: Awaited<ReturnType<typeof readGameHistory>>['games'][number]):GameEdit {
   return {gameId:game.id,position:game.gameNo,holderTeamId:game.holderTeamId,challengerTeamId:game.challengerTeamId,result:'timeout',winningTeamId:'',scorerPlayerId:'',assistPlayerId:'',ownGoal:false,exitingTeamId:game.holderTeamId}
 }
+
+it.each([false, true])('repairs the latest-game successor, preserving its paused clock: started=%s', async(started)=>{
+  const {session,set,players,teams}=await fixture(1)
+  const upcoming=(await readGameHistory(set.id)).games.at(-1)!
+  if(started) { await startGame(upcoming.id); await pauseGame(upcoming.id) }
+  const before=await readGameHistory(set.id)
+  const clock=before.games.at(-1)!
+  await saveGameEdit(session.id,before,{...timeout(before.games[0]),result:'goal',winningTeamId:teams[1].id,scorerPlayerId:players[2].id},'Wrong winner')
+  expect(await db.games.get(upcoming.id)).toMatchObject({holderTeamId:teams[1].id,challengerTeamId:teams[2].id,waitingTeamId:teams[0].id,incumbentTeamId:teams[1].id,status:clock.status,remainingSeconds:clock.remainingSeconds,timerStartedAt:null})
+  await reverseGameCorrection(session.id,(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!.id)
+  expect(await readGameHistory(set.id)).toEqual(before)
+})
+
+it.each([false,true])('reopens a mistaken fourth-win set and reverses both sets: started=%s',async(started)=>{
+  const {session,set,players,teams}=await fixture(4)
+  const nextSet=(await db.sets.where('sessionId').equals(session.id).sortBy('setNo')).at(-1)!
+  const nextGame=(await readGameHistory(nextSet.id)).games[0]
+  if(started) { await startGame(nextGame.id); await pauseGame(nextGame.id) }
+  const next=await readGameHistory(nextSet.id), before=await readGameHistory(set.id)
+  const last=before.games.at(-1)!
+  const opponent=teams.findIndex(t=>t.id===last.challengerTeamId)
+  await saveGameEdit(session.id,before,{...timeout(last),result:'goal',winningTeamId:last.challengerTeamId,scorerPlayerId:players[opponent*2].id},'Wrong fourth win')
+  const after=await readGameHistory(set.id)
+  expect(after.set).toMatchObject({status:'live',winningTeamId:null,endedAt:null})
+  expect(await db.sets.get(nextSet.id)).toBeUndefined()
+  expect(after.games.at(-1)).toMatchObject({holderTeamId:last.challengerTeamId,challengerTeamId:last.waitingTeamId,waitingTeamId:last.holderTeamId,incumbentTeamId:last.challengerTeamId,status:next.games[0].status,remainingSeconds:next.games[0].remainingSeconds})
+  expect(after.timerEvents.filter(e=>e.gameId===after.games.at(-1)!.id).map(e=>e.eventType).sort()).toEqual(next.timerEvents.map(e=>e.eventType).sort())
+  await reverseGameCorrection(session.id,(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!.id)
+  expect(await readGameHistory(set.id)).toEqual(before)
+  expect(await readGameHistory(nextSet.id)).toEqual(next)
+  await reverseGameCorrection(session.id,(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!.id)
+  expect(await db.sets.get(nextSet.id)).toBeUndefined()
+  expect(await readGameHistory(set.id)).toEqual(after)
+})
+
+it('leaves live play unchanged when a later game has already finished',async()=>{
+  const {session,set}=await fixture(4)
+  const nextSet=(await db.sets.where('sessionId').equals(session.id).sortBy('setNo')).at(-1)!
+  const game=(await readGameHistory(nextSet.id)).games[0]
+  const member=await db.setTeamMembers.where('teamId').equals(game.holderTeamId).first()
+  await startGame(game.id)
+  await recordGoal({gameId:game.id,teamId:game.holderTeamId,scorerPlayerId:member!.playerId})
+  const next=await readGameHistory(nextSet.id), before=await readGameHistory(set.id)
+  await saveGameEdit(session.id,before,timeout(before.games.at(-1)!),'Historical correction')
+  expect(await readGameHistory(nextSet.id)).toEqual(next)
+  expect((await db.sets.get(set.id))?.status).toBe('completed')
+})
+
+it('repairs the next set when the corrected winner still reaches the target and blocks stale reversal',async()=>{
+  const {session,set,players,teams}=await fixture(0)
+  await db.sessions.update(session.id,{pointsToWinSet:1})
+  const first=(await readGameHistory(set.id)).games[0]
+  await startGame(first.id)
+  await recordGoal({gameId:first.id,teamId:teams[0].id,scorerPlayerId:players[0].id})
+  const nextSet=(await db.sets.where('sessionId').equals(session.id).sortBy('setNo')).at(-1)!
+  const nextTeams=await db.setTeams.where('setId').equals(nextSet.id).sortBy('sortOrder')
+  const before=await readGameHistory(set.id)
+  await saveGameEdit(session.id,before,{...timeout(before.games[0]),result:'goal',winningTeamId:teams[1].id,scorerPlayerId:players[2].id},'Wrong set winner')
+  expect((await db.sets.get(set.id))?.winningTeamId).toBe(teams[1].id)
+  const next=(await readGameHistory(nextSet.id)).games[0]
+  expect(next).toMatchObject({holderTeamId:nextTeams[1].id,challengerTeamId:nextTeams[2].id,waitingTeamId:nextTeams[0].id,incumbentTeamId:nextTeams[1].id})
+  await startGame(next.id); await pauseGame(next.id)
+  await expect(reverseGameCorrection(session.id,(await db.sessions.get(session.id))!.gameCorrections!.at(-1)!.id)).rejects.toThrow('Ný skráning')
+})
+
+it('carries a paused successor into the next set when the latest correction creates a fourth win',async()=>{
+  const {session,set,players,teams}=await fixture(3,2)
+  let game=(await readGameHistory(set.id)).games.at(-1)!
+  await startGame(game.id)
+  await recordGoal({gameId:game.id,teamId:teams[1].id,scorerPlayerId:players[2].id})
+  const upcoming=(await readGameHistory(set.id)).games.at(-1)!
+  await startGame(upcoming.id); await pauseGame(upcoming.id)
+  const before=await readGameHistory(set.id)
+  game=before.games.filter(g=>g.status==='completed').at(-1)!
+  await saveGameEdit(session.id,before,{...timeout(game),result:'goal',winningTeamId:teams[0].id,scorerPlayerId:players[0].id},'Missed fourth win')
+  expect((await db.sets.get(set.id))?.winningTeamId).toBe(teams[0].id)
+  const next=await createSet(session.id,teams.map((t,i)=>({name:t.name,color:t.color,playerIds:players.slice(i*2,i*2+2).map(p=>p.id)})))
+  expect((await readGameHistory(next.id)).games[0]).toMatchObject({status:'paused',remainingSeconds:before.games.at(-1)!.remainingSeconds,timerStartedAt:null})
+})
 it('changes an older result offline, preserves later matchups and restores it from audit',async()=>{
   const {session,set}=await fixture()
   const before=await readGameHistory(set.id)

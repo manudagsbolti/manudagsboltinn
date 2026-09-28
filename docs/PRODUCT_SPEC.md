@@ -93,12 +93,13 @@ The operator can then add one or more substitutes by searching existing players.
 
 ### 4.2 Team count and sizes
 
-Captains (confirmed September 2026): randomly choose one member of each team
-for each new set, independently of player rating or role. Show a C badge before
+Captains (updated September 2026): randomly choose one member of each team
+when teams are first drawn, independently of player rating or role. Show a C badge before
 the name in team selection and rosters, and show the current captain's name on
 the live scoreboard for all teams including the waiting team. Persist the choice
 with the set team; rendering/reloading must not redraw it. Setup roster changes
-redraw the preview captains. Each subsequent set draws again. Historical teams
+redraw the preview captains. Keep captains when the same team continues into a
+new set; draw a new captain when that team's membership changes. Historical teams
 without a saved captain remain unassigned; summaries label captain set numbers.
 
 A session supports **2 or 3 teams**.
@@ -292,13 +293,23 @@ before/after wins and set-winner preview. During live recording show the preview
 alongside the editor and save with one action; the reason is optional and defaults
 to “Leiðrétting í leik”. Completed-night corrections retain reason and separate
 confirmation requirements.
-Preserve later matchups and set boundaries as actually played; never replay
-rotation or move games automatically after a historical correction. Derive the
+Correcting the latest completed game in place during live play repairs its
+immediate unfinished successor: winner stays, loser waits, waiting team enters,
+and incumbent follows the corrected rotation. Preserve remaining time and leave
+started play PAUSED; an unstarted game stays READY. Across a set boundary with
+unchanged team membership and no later completed game, update the next lineup;
+if the fourth win is removed, discard the provisional next set and continue the
+previous set with the corrected score and paused/ready game. If a latest-game
+correction instead closes the current set, carry its repaired lineup and paused
+clock into the next set when the operator continues with the same teams.
+Older edits, insertion, deletion and reordering preserve later matchups and set
+boundaries as actually played; never replay completed history. Derive the
 set winner as the first team to reach the configured target in recorded order.
 A closed older set without enough wins awards no winner, even though its boundary
-remains closed. Extra recorded games after the target remain facts. A correction
-that would close the current set must wait for an already-started game to finish.
-An unstarted next matchup stays as prepared, including when starting the next set.
+remains closed. Extra recorded games after the target remain facts. An older
+correction that would close the current set must wait for an already-started
+game to finish; the latest-game repair above carries that paused game forward.
+Outside the latest-game repair above, an unstarted next matchup stays as prepared.
 Operators can explicitly edit the current matchup from the live screen or history:
 pause first, select two distinct teams and the known incumbent (or unknown).
 The remaining team waits; two-team mode has no waiting team or incumbent.

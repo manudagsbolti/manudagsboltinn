@@ -6,6 +6,7 @@ team-then-membership inserts within atomic sync/submission transactions. Legacy
 teams keep null. No Dexie index change is required; existing sync/backup flows
 include the field. Captains are sampled uniformly once during set creation or
 confirmed from the setup preview, independently of the weighted team algorithm.
+New sets reuse the previous captain for a team with identical membership.
 
 Optional assists: session.assistsEnabled controls future recording only;
 goal.assistsRecorded snapshots coverage and remains false when a later toggle
@@ -25,6 +26,12 @@ number ranges before applying final numbering to respect immediate unique keys.
 Deletion cascades game events; reversal restores recorded timer events as well.
 No invented start/end timestamps are assigned to manually inserted games.
 Optimistic snapshot comparison rejects stale editor saves and unsafe reversal.
+Latest-game corrections repair the immediate unfinished successor via the domain
+rotation function. Optional following-set snapshots plus rosters in correction
+history support atomic cross-set repair/reopening and reversal using existing
+JSON history storage. Completed later games prevent live-lineup repair. Deleting
+a provisional set queues its cascading cloud delete before restoring the current
+set's game; all local facts, clock events and outbox writes share one transaction.
 
 ## Grunnhugsun
 
