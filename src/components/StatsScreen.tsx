@@ -11,28 +11,37 @@ export function StatsScreen({ onPresent }: { onPresent: (seasonId: string) => vo
   }), [])
   const [tab, setTab] = useState<'table'|'awards'|'records'|'shame'>('table')
   const [selectedId, setSelectedId] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0,10))
+  const [ranking, setRanking] = useState<'ABS'|'points'>('points')
   const selectedSeason = data?.seasons.find(s => s.id === selectedId) ?? data?.seasons[0]
+  const startsOn = startDate || selectedSeason?.startsOn || ''
   const [roleFilter, setRoleFilter] = useState<'REGULAR'|'SUBSTITUTE'|'ALL'>('REGULAR')
-  const analytics = useMemo(() => data ? buildSeasonAnalytics(data, selectedSeason ?? seasonStartYearForDate(new Date().toISOString().slice(0,10)), roleFilter) : null, [data, selectedSeason, roleFilter])
+  const analytics = useMemo(() => data ? buildSeasonAnalytics(data, selectedSeason ?? seasonStartYearForDate(new Date().toISOString().slice(0,10)), roleFilter, {startsOn,endsOn:endDate}) : null, [data, selectedSeason, roleFilter, startsOn, endDate])
 
   if (!data || !analytics) return <section className="screen loading-screen">Hleð tölfræði…</section>
   const playerName = (id?: string) => data.players.find(p => p.id === id)?.name ?? '—'
-  const overall = [...analytics.players].sort((a,b)=>b.points-a.points||b.setWins-a.setWins||b.goals-a.goals)
+  const overall = [...analytics.players].sort((a,b)=>(ranking==='ABS'?b.setWins-a.setWins:b.points-a.points)||playerName(a.playerId).localeCompare(playerName(b.playerId),'is'))
   const shame = [...analytics.players].sort((a,b)=>b.nixDays-a.nixDays||b.chokes-a.chokes||b.zeroPointSets-a.zeroPointSets)
   const topGoals=[...analytics.players].sort((a,b)=>b.goals-a.goals)[0]
-  const topPoints=overall[0]
+  const topPoints=[...analytics.players].sort((a,b)=>b.points-a.points)[0]
   const topRating=[...analytics.players].sort((a,b)=>b.rating-a.rating)[0]
 
   return <section className="screen page-screen stats-screen">
     {analytics.assistsIncomplete && <p className="data-quality-note">Stoðsendingar vantar í hluta skráningarinnar. Stoðsendingar og G+A telja aðeins skráð framlag.</p>}
     <div className="section-heading"><div><span className="eyebrow">TÍMABIL</span><h1>Tölfræði & verðlaun</h1></div><button className="presentation-button" onClick={()=>onPresent(selectedSeason?.id ?? String(seasonStartYearForDate(new Date().toISOString().slice(0,10))))}>▶ Kynning</button></div>
-    <div className="season-picker card"><div><small>Valið tímabil</small><strong>{analytics.season.name}</strong></div><select value={selectedSeason?.id ?? ''} onChange={e=>setSelectedId(e.target.value)}>{data.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+    <div className="season-picker card"><div><small>Valið tímabil</small><strong>{analytics.season.name}</strong></div><select value={selectedSeason?.id ?? ''} onChange={e=>{setSelectedId(e.target.value);setStartDate('')}}>{data.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+    <div className="card"><label>Gögn frá og með<input type="date" value={startsOn} max={endDate} onChange={e=>setStartDate(e.target.value)}/></label><label>Gögn til og með<input type="date" value={endDate} min={startsOn} onChange={e=>setEndDate(e.target.value)}/></label><label>Röðun<select value={ranking} onChange={e=>setRanking(e.target.value as 'ABS'|'points')}><option value="ABS">ABS — eins og í kynningum</option><option value="points">Stig í smáleikjum</option></select></label>
+      <p>{startsOn}–{endDate}, báðir dagar meðtaldir. Aðeins kláruð kvöld valinnar annar úr gögnum á þessu tæki. ABS = unnin sett / {analytics.totals.sets} spiluð sett tímabilsins. Stig í smáleikjum eru önnur mæling. <a href="#/cloud">Samstilla gögn</a></p>
+      {startsOn>endDate&&<p role="alert">Upphafsdagur þarf að vera fyrir eða á lokadegi.</p>}
+      <details><summary>Kvöld sem telja ({analytics.sessions.length})</summary><ul>{analytics.sessions.map(s=><li key={s.id}>{s.playedOn}</li>)}</ul></details>
+    </div>
     <div className="segmented"><button className={roleFilter==='REGULAR'?'active':''} onClick={()=>setRoleFilter('REGULAR')}>Fastamenn</button><button className={roleFilter==='SUBSTITUTE'?'active':''} onClick={()=>setRoleFilter('SUBSTITUTE')}>Varamenn</button><button className={roleFilter==='ALL'?'active':''} onClick={()=>setRoleFilter('ALL')}>Allir</button></div>
     <div className="season-metrics"><div><b>{analytics.totals.nights}</b><span>kvöld</span></div><div><b>{analytics.totals.sets}</b><span>sett</span></div><div><b>{analytics.totals.goals}</b><span>mörk</span></div><div><b>{analytics.totals.players}</b><span>leikmenn</span></div></div>
     {analytics.players.length > 0 && <div className="leader-cards"><StatLeader icon="🏆" label="Stigakóngur" value={`${topPoints?.points ?? 0} stig`} name={playerName(topPoints?.playerId)}/><StatLeader icon="⚽" label="Markakóngur" value={`${topGoals?.goals ?? 0} mörk`} name={playerName(topGoals?.playerId)}/><StatLeader icon="📈" label="Rating" value={`${topRating?.rating ?? 100}`} name={playerName(topRating?.playerId)}/></div>}
     <div className="segmented stats-tabs"><button className={tab==='table'?'active':''} onClick={()=>setTab('table')}>Tafla</button><button className={tab==='awards'?'active':''} onClick={()=>setTab('awards')}>Verðlaun</button><button className={tab==='records'?'active':''} onClick={()=>setTab('records')}>Met</button><button className={tab==='shame'?'active':''} onClick={()=>setTab('shame')}>😵</button></div>
 
-    {tab==='table' && <div className="stats-table card season-table"><div className="stats-table-head season"><span>#</span><span>Leikmaður</span><span>Stig</span><span>Sett</span><span>⚽</span><span>🅰</span><span>R</span></div>{overall.map((row,index)=><div className="stats-table-row season" key={row.playerId}><span className="rank">{index+1}</span><span className="player-cell"><b>{playerName(row.playerId)}</b><small>{row.sessions} kvöld · {fmt(row.pointsPerNight)} stig/kv.</small></span><strong>{row.points}</strong><span>{row.setWins}</span><span>{row.goals}</span><span>{row.assists}</span><span>{row.rating}</span></div>)}{!overall.length&&<div className="empty-table">Engin kláruð kvöld á þessu tímabili enn.</div>}</div>}
+    {tab==='table' && <div className="stats-table card season-table"><div className="stats-table-head season"><span>#</span><span>Leikmaður</span><span>Stig</span><span>Sett</span><span>⚽</span><span>🅰</span><span>R</span></div>{overall.map((row,index)=><div className="stats-table-row season" key={row.playerId}><span className="rank">{1+new Set(overall.slice(0,index).map(p=>ranking==='ABS'?p.setWins:p.points)).size}</span><span className="player-cell"><b>{playerName(row.playerId)}</b><small>{row.sessions} kvöld · ABS {analytics.totals.sets?fmt(100*row.setWins/analytics.totals.sets):'0'}% · ADJ {fmt(100*row.setWinRate)}%</small></span><strong>{row.points}</strong><span>{row.setWins}</span><span>{row.goals}</span><span>{row.assists}</span><span>{row.rating}</span></div>)}{!overall.length&&<div className="empty-table">Engin kláruð kvöld á þessu tímabili enn.</div>}</div>}
 
     {tab==='awards' && <div className="awards-grid">{analytics.awards.map(award=><article className={`award-card ${award.tone}`} key={award.key}><div className="award-icon">{award.icon}</div><small>{award.title}</small><h3>{playerName(award.playerId)}</h3><strong>{award.value}</strong><p>{award.detail}</p></article>)}</div>}
 

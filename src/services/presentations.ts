@@ -19,7 +19,7 @@ export interface Slide {
   story?: { kind: 'choke' | 'nix' | 'podium'; phase: 'intro' | 'score' | 'reveal'; caption: string; value?: string; rank?: number; finale?: boolean }
 }
 export interface Presentation {
-  id: string; title: string; seasonId: string; eventDate: string; cutoff: string
+  id: string; title: string; seasonId: string; eventDate: string; cutoff: string; startsOn?: string
   kind: 'midterm' | 'final'; publishedAt: string; schemaVersion: 1
   slides: Slide[]; source?: AnalyticsData & { season: Season }
 }
@@ -32,11 +32,13 @@ export async function readPresentationData() {
   }))
 }
 export function buildPresentation(data: AnalyticsData, season: Season, options: {
-  title: string; kind: Presentation['kind']; eventDate: string; cutoff: string; sections: SectionKey[]; minimumPairSets: number; discussion: string
+  title: string; kind: Presentation['kind']; eventDate: string; cutoff: string; startsOn?: string; sections: SectionKey[]; minimumPairSets: number; discussion: string
 }): Presentation {
   if (!options.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(options.eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(options.cutoff) || options.cutoff > options.eventDate) throw new Error('Athugaðu heiti, viðburðardag og lokadag gagna.')
   if (!Number.isInteger(options.minimumPairSets) || options.minimumPairSets < 1) throw new Error('Lágmark para þarf að vera heil tala, a.m.k. 1.')
-  const sessions = data.sessions.filter(s => s.seasonId === season.id && s.status === 'completed' && s.playedOn <= options.cutoff)
+  const startsOn = options.startsOn ?? season.startsOn
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn) || startsOn > options.cutoff) throw new Error('Upphafsdagur þarf að vera fyrir eða á lokadegi gagna.')
+  const sessions = buildSeasonAnalytics(data, season, 'ALL', { startsOn, endsOn: options.cutoff }).sessions
   if (!sessions.length) throw new Error('Engin kláruð kvöld á þessu tímabili.')
   const sessionIds = new Set(sessions.map(s=>s.id)), sets = data.sets.filter(s=>sessionIds.has(s.sessionId))
   const setIds = new Set(sets.map(s=>s.id)), games = data.games.filter(g=>setIds.has(g.setId)), gameIds = new Set(games.map(g=>g.id))
@@ -49,7 +51,7 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
   const all = buildSeasonAnalytics(source,season,'ALL')
   const name = (id:string)=>source.players.find(p=>p.id===id)?.name ?? id
   const pct = (a:number,b:number)=>b ? `${(100*a/b).toLocaleString('is-IS',{maximumFractionDigits:1})}%` : '—'
-  const totalSets = sets.filter(s=>s.status==='completed'||games.some(g=>g.setId===s.id&&g.startedAt)).length + source.backfills.reduce((n,b)=>n+b.rounds.length,0)
+  const totalSets = all.totals.sets
   const regularIds = [...new Set(attendance.filter(a=>a.roleAtSession==='REGULAR').map(a=>a.playerId))].sort((a,b)=>name(a).localeCompare(name(b),'is'))
   const pairs = new Map<string,{ids:string[]; played:number; wins:number; goals:number; chokes:number}>()
   for(let i=0;i<regularIds.length;i++)for(let j=i+1;j<regularIds.length;j++)pairs.set(JSON.stringify([regularIds[i],regularIds[j]]),{ids:[regularIds[i],regularIds[j]],played:0,wins:0,goals:0,chokes:0})
@@ -69,7 +71,8 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
     const leaders=b.teams.filter(t=>(round.teamGoals[t.code]??0)===highest)
     for(const t of b.teams){const score=round.teamGoals[t.code]??0;const won=highest>=4&&leaders.length===1&&leaders[0].code===t.code;addTeam(b.sessionId,t.playerIds,won,score,!won&&score===3)}
   }
-  const slides:Slide[]=[{title:options.title.trim(),note:`${season.name} · ${options.eventDate} · Gögn til og með ${options.cutoff}`,columns:[],rows:[]}]
+  const periodNote = `${season.name} · Gögn ${startsOn}–${options.cutoff} að báðum dögum meðtöldum · ${sessions.length} kláruð kvöld · ${totalSets} spiluð sett.`
+  const slides:Slide[]=[{title:options.title.trim(),note:`Viðburður ${options.eventDate}. ${periodNote} Kvöld: ${sessions.map(s=>s.playedOn).join(', ')}.`,columns:[],rows:[]}]
   const add=(key:SectionKey,title:string,columns:string[],rows:string[][],note?:string,notice?:string)=>{
     if(!options.sections.includes(key))return
     if (['best','worst','attendance','goals','extra'].includes(key)) {
@@ -81,7 +84,7 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
     const pages=Math.max(1,Math.ceil(rows.length/pageSize))
     for(let page=0;page<pages;page++)slides.push({title:pages>1?`${title} · ${page+1}/${pages}`:title,columns,rows:rows.slice(page*pageSize,page*pageSize+pageSize),note:note??(rows.length?undefined:'Engin skráð niðurstaða.'),...(notice?{notice}:{}),...(key==='table'||key==='often'?{layout:'compact-table' as const}:key==='never'?{layout:'pair-list' as const}:{})})
   }
-  const common='Fastamenn eingöngu, samkvæmt hlutverki hvers kvölds. Jafnar tölur eru jafnar niðurstöður.'
+  const common=`${periodNote} Fastamenn eingöngu, samkvæmt hlutverki hvers kvölds. Jafnar tölur eru jafnar niðurstöður.`
   const awardStory = (key: 'choke' | 'nix', title: string, metric: 'chokes' | 'nixDays', unit: string, note: string) => {
     if (!options.sections.includes(key)) return
     const levels = [...new Set(regular.players.map(p => p[metric]).filter(value => value > 0))].sort((a,b)=>b-a).slice(0,key==='choke'?3:2).reverse()
@@ -110,9 +113,9 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
   add('goals','Marka hrókarnir',['Leikmaður','Mörk'],playerRows('goals'),`${common} Sjálfsmörk telja ekki sem mörk skorarans.`)
   awardStory('nix','Nixarinn','nixDays','nix',`${common} Nix: heilt kvöld án stigs.`)
   const standings=[...regular.players].sort((a,b)=>b.setWins-a.setWins||name(a.playerId).localeCompare(name(b.playerId),'is'))
-  const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>[name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)])
-  const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Choke','Nix','Mæting']
-  const rankingNote=`${common} ABS = unnin sett / ${totalSets} sett annarinnar. ADJ = unnin sett / spiluð sett viðkomandi. Röðun eftir ABS; jafntefli deila sæti.`
+  const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>[name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),String(p.points),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)])
+  const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Stig','Choke','Nix','Mæting']
+  const rankingNote=`${common} ABS = unnin sett / ${totalSets} sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Stig = stig úr smáleikjum, sama mæling og Stig í tölfræðitöflunni. Röðun eftir ABS; jafntefli deila sæti.`
   add('subs','Varamenn',columns,tableRows([...subs.players].sort((a,b)=>b.setWins-a.setWins)),'Aðeins framlag á kvöldum sem varamaður. ABS og mæting nota öll kvöld/sett tímabilsins.')
   if(options.sections.includes('podium'))for(const rank of [3,2,1]){
     const values = [...new Set(standings.map(p=>p.setWins))]
@@ -144,7 +147,7 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
     if(slides.length===1)slides.push({title:'Takk fyrir kvöldið',columns:[],rows:[]})
     slides.splice(slides.length-1,0,{title:'Sturlaðar staðreyndir',layout:'fun-facts',columns:['Staðreynd','Tala','Sagan'],rows:facts.slice(0,4),note:'Reiknað úr sama frysta gagnasafni og kynningin. Aðeins framlag sem fastamaður; pör telja sameiginleg sett. Þetta eru lýsingar á skráðum gögnum, ekki spár.'})
   }
-  return {id:crypto.randomUUID(),schemaVersion:1,title:options.title.trim(),seasonId:season.id,kind:options.kind,eventDate:options.eventDate,cutoff:options.cutoff,publishedAt:new Date().toISOString(),slides,source}
+  return {id:crypto.randomUUID(),schemaVersion:1,title:options.title.trim(),seasonId:season.id,kind:options.kind,eventDate:options.eventDate,startsOn,cutoff:options.cutoff,publishedAt:new Date().toISOString(),slides,source}
 }
 
 export async function publishPresentation(p:Presentation) {

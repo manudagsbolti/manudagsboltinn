@@ -86,10 +86,11 @@ export function seasonYearsFromSessions(sessions: Session[]): number[] {
   return [...years].sort((a,b) => b-a)
 }
 
-export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Season, roleFilter: 'REGULAR' | 'SUBSTITUTE' | 'ALL' = 'REGULAR'): SeasonAnalytics {
+export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Season, roleFilter: 'REGULAR' | 'SUBSTITUTE' | 'ALL' = 'REGULAR', period?: { startsOn: string; endsOn: string }): SeasonAnalytics {
   const season = typeof selection === 'number' ? seasonWindow(selection) : selection
   const sessions = data.sessions
     .filter(s => s.status === 'completed' && (typeof selection === 'number' ? s.playedOn >= season.startsOn && s.playedOn <= (season.endsOn ?? '9999-12-31') : s.seasonId === season.id))
+    .filter(s => !period || (s.playedOn >= period.startsOn && s.playedOn <= period.endsOn))
     .sort((a,b) => a.playedOn.localeCompare(b.playedOn))
   const sessionIds = new Set(sessions.map(s => s.id))
   const seasonSets = data.sets.filter(s => sessionIds.has(s.sessionId))
@@ -167,7 +168,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
     awards: buildAwards(rows),
     totals: {
       nights: sessions.length,
-      sets: seasonSets.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.length, 0),
+      sets: seasonSets.filter(s => s.status === 'completed' || seasonGames.some(g => g.setId === s.id && g.startedAt)).length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.length, 0),
       games: seasonGames.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.reduce((roundSum, round) => roundSum + Object.values(round.teamGoals).reduce((goalSum, goals) => goalSum + (goals ?? 0), 0), 0), 0),
       goals: seasonGoals.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.playerGoals.reduce((goalSum, row) => goalSum + row.goals, 0), 0),
       players: rows.length,

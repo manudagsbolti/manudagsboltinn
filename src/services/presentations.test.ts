@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { buildPresentation, sections } from './presentations'
-import type { AnalyticsData } from './seasonAnalytics'
+import { buildSeasonAnalytics, type AnalyticsData } from './seasonAnalytics'
 import type { Season, Session } from '../domain/types'
 import migration from '../../supabase/migrations/018_presentations.sql?raw'
 
@@ -14,6 +14,23 @@ function fixture():AnalyticsData {
 }
 const options={title:'Miðannamat',kind:'midterm' as const,eventDate:'2026-10-29',cutoff:'2026-10-28',sections:sections.map(([key])=>key),minimumPairSets:1,discussion:'Mæting'}
 describe('event publications',()=>{
+  it('uses inclusive selected dates and the same points and ABS denominator as statistics',()=>{
+    const data=fixture()
+    data.sessions.push(session('earlier','2026-09-07'))
+    data.attendance.push({sessionId:'earlier',playerId:'a',roleAtSession:'REGULAR'})
+    data.backfills!.push({...structuredClone(data.backfills![0]),sessionId:'earlier'})
+    data.sets.push({id:'prepared',sessionId:'one',setNo:1,status:'ready',createdAt:'',updatedAt:''})
+    const p=buildPresentation(data,season,{...options,startsOn:'2026-10-26',cutoff:'2026-10-26'})
+    const a=buildSeasonAnalytics(data,season,'REGULAR',{startsOn:p.startsOn!,endsOn:p.cutoff})
+    expect(a.totals.sets).toBe(2)
+    expect(p.source?.sessions.map(s=>s.id)).toEqual(['one'])
+    expect(p.slides[0].note).toContain('2026-10-26–2026-10-26')
+    const table=p.slides.find(s=>s.title==='Staðan')!
+    const row=table.rows.find(r=>r[0]==='a')!
+    expect(row[table.columns.indexOf('Stig')]).toBe(String(a.players.find(r=>r.playerId==='a')!.points))
+    expect(row[2]).toBe(`${100*a.players[0].setWins/a.totals.sets}%`)
+    expect(()=>buildPresentation(data,season,{...options,startsOn:'2026-10-29'})).toThrow()
+  })
   it('freezes cutoff raw facts and derives ABS, role-separated results and aggregate pairs',()=>{
     const data=fixture(),p=buildPresentation(data,season,options)
     expect(p.source?.sessions.map(s=>s.id)).toEqual(['one'])

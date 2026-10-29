@@ -26,6 +26,7 @@ export function PresentationsScreen(){
   const data=useLiveQuery(readPresentationData,[])
   const archive=useLiveQuery(()=>db.presentations.orderBy('eventDate').reverse().toArray(),[])
   const [seasonId,setSeasonId]=useState(''),[kind,setKind]=useState<Presentation['kind']>('midterm')
+  const [startDate,setStartDate]=useState('')
   const [eventDate,setEventDate]=useState(new Date().toISOString().slice(0,10)),[cutoff,setCutoff]=useState(new Date().toISOString().slice(0,10))
   const [title,setTitle]=useState('Miðannamat'),[selected,setSelected]=useState<SectionKey[]>(sections.filter(([k])=>k!=='extra').map(([k])=>k))
   const [minimum,setMinimum]=useState(3),[discussion,setDiscussion]=useState('Mætingin\nFramhaldið')
@@ -35,6 +36,8 @@ export function PresentationsScreen(){
   const download = (p:Presentation) => { void downloadPresentation(p).catch(() => setError('HTML niðurhal mistókst. Reyndu aftur.')) }
   useEffect(()=>{void refreshPresentations().catch(e=>setError(e.message))},[])
   const season=data?.seasons.find(s=>s.id===seasonId)??data?.seasons[0]
+  const startsOn=startDate||season?.startsOn||''
+  const included=data?.sessions.filter(s=>s.seasonId===season?.id&&s.status==='completed'&&s.playedOn>=startsOn&&s.playedOn<=cutoff).sort((a,b)=>a.playedOn.localeCompare(b.playedOn))??[]
   const invalidate=()=>{setPreview(null);setMessage('')}
   if(notesFor)return <section className="screen page-screen event-editor"><button onClick={()=>setNotesFor(null)}>← Til baka</button><DiscussionNotebook presentation={notesFor}/></section>
   if(view)return <PresentationViewer key={view.id} document={view} onBack={()=>setView(null)} onDiscussion={()=>setNotesFor(view)}/>
@@ -42,16 +45,19 @@ export function PresentationsScreen(){
     <p>Veldu efni, forskoðaðu og gefðu út. Útgefnar síður breytast ekki þegar tölfræðin breytist síðar.</p>
     {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
     <div className="card event-form"><h2>Ný kynning</h2>
-      <label>Önn<select value={season?.id??''} onChange={e=>{setSeasonId(e.target.value);invalidate()}}>{data?.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <label>Önn<select value={season?.id??''} onChange={e=>{setSeasonId(e.target.value);setStartDate('');invalidate()}}>{data?.seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       <label>Tegund<select value={kind} onChange={e=>{const k=e.target.value as Presentation['kind'];setKind(k);setTitle(k==='midterm'?'Miðannamat':'Lokahóf');invalidate()}}><option value="midterm">Miðannamat</option><option value="final">Lokahóf</option></select></label>
       <label>Heiti<input value={title} onChange={e=>{setTitle(e.target.value);invalidate()}}/></label>
       <label>Dagsetning viðburðar<input type="date" value={eventDate} onChange={e=>{setEventDate(e.target.value);invalidate()}}/></label>
       <label>Gögn til og með<input type="date" max={eventDate} value={cutoff} onChange={e=>{setCutoff(e.target.value);invalidate()}}/></label>
+      <label>Gögn frá og með<input type="date" max={cutoff} value={startsOn} onChange={e=>{setStartDate(e.target.value);invalidate()}}/></label>
+      <p>Gögn á þessu tæki: {included.length} kláruð kvöld. Báðir dagar telja með. Ókláruð kvöld telja ekki. Samstilltu fyrst í <a href="#/cloud">Sync</a> til að sækja nýjustu samþykktu gögnin.</p>
+      <details><summary>Kvöld sem telja í kynningunni</summary><ul>{included.map(s=><li key={s.id}>{s.playedOn}</li>)}</ul></details>
       <label>Lágmark sameiginlegra setta í bestu/verstu pörun<input type="number" min="1" step="1" value={minimum} onChange={e=>{setMinimum(Number(e.target.value));invalidate()}}/></label>
       <fieldset><legend>Efni kynningar</legend>{sections.map(([key,label])=><label className="event-check" key={key}><input type="checkbox" checked={selected.includes(key)} onChange={e=>{setSelected(s=>e.target.checked?[...s,key]:s.filter(k=>k!==key));invalidate()}}/>{label}</label>)}</fieldset>
       <label>Pallborðsumræða — eitt atriði í línu<textarea value={discussion} onChange={e=>{setDiscussion(e.target.value);invalidate()}}/></label>
       <p>Röðun: ABS = unnin sett / öll spiluð sett annarinnar. Aðalkeppni telur aðeins framlag sem fastamaður; varamenn eru sér.</p>
-      <button disabled={!season||!selected.length||busy} onClick={async()=>{setError('');try{const fresh=await readPresentationData();const s=fresh.seasons.find(s=>s.id===season?.id);if(!s)throw new Error('Veldu önn.');const p=buildPresentation(fresh,s,{title,kind,eventDate,cutoff,sections:selected,minimumPairSets:minimum,discussion});setPreview(p);setView(p)}catch(e){setError((e as Error).message)}}}>Búa til forskoðun úr núverandi gögnum</button>
+      <button disabled={!season||!selected.length||busy||!included.length||startsOn>cutoff} onClick={async()=>{setError('');try{const fresh=await readPresentationData();const s=fresh.seasons.find(s=>s.id===season?.id);if(!s)throw new Error('Veldu önn.');const p=buildPresentation(fresh,s,{title,kind,eventDate,startsOn,cutoff,sections:selected,minimumPairSets:minimum,discussion});setPreview(p);setView(p)}catch(e){setError((e as Error).message)}}}>Búa til forskoðun úr núverandi gögnum</button>
       {preview&&<div className="event-actions"><button onClick={()=>setView(preview)}>Opna forskoðun</button><button onClick={()=>download(preview)}>Sækja sjálfstæða HTML síðu</button><button disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await publishPresentation(preview);setMessage('Kynning gefin út. Tengillinn er aðgengilegur án innskráningar.');setPreview(null)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}}>{busy?'Gef út…':'Gefa út þessa útgáfu á vefnum'}</button><p>Útgáfa birtir nöfn og valda tölfræði öllum sem hafa tengilinn. Gögnin í þessari forskoðun verða varðveitt óbreytt.</p></div>}
     </div>
     <h2>Útgefnar kynningar</h2><button onClick={()=>{setError('');void refreshPresentations().catch(e=>setError(e.message))}}>Sækja útgáfur úr skýinu</button>

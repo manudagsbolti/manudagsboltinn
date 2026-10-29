@@ -18,6 +18,17 @@ Fyrirmyndir lesnar á Drive: Mánudagsboltinn-2025-02-mid.pptx (haust 2025) og M
 
 Þessi breyting á uppbyggingu gildir fyrir nýjar forskoðanir; áður útgefið efni heldur vistuðum glærum.
 
+## Val gagna og samanburður
+
+Velja má upphafsdag og lokadag gagna (báðir telja með). Sjálfgefið upphaf er
+upphaf valinnar annar. Listi sýnir hvaða kláruðu kvöld telja úr gögnum á tækinu;
+samstilla þarf fyrst ef önnur tæki hafa nýrri samþykkt gögn. Tölfræðisíðan hefur
+sömu dagasíu og val um ABS eða stig í smáleikjum. Stig eru einnig sér dálkur í
+kynningartöflunni; þau eru ekki unnin sett eða ABS. ABS notar öll spiluð sett
+valins tímabils, án óbyrjaðra undirbúningssetta. Nýjar kynningar sýna tímabil,
+kvöldafjölda og sett. Eldri útgáfur haldast óbreyttar; búa þarf til nýja kynningu
+til að nota breytt tímabil.
+
 ## Tölfræði
 
 ABS = unnin sett / öll spiluð sett annarinnar. ADJ = unnin sett / spiluð sett viðkomandi. Aðalkeppni telur aðeins hlutverk REGULAR á hverju kvöldi; varamenn eru sér. Verðlaunahópar nota þrjú efstu ólíku ABS-gildin, með öllum jöfnum saman. Heildartaflan heldur sömu ABS-röðun og tölum.
