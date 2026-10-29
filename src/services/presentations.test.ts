@@ -65,7 +65,9 @@ describe('event publications',()=>{
     expect(p.slides[0].note).toContain('2026-10-26–2026-10-26')
     const table=p.slides.find(s=>s.title==='Staðan')!
     const row=table.rows.find(r=>r[0]==='a')!
-    expect(row[table.columns.indexOf('Stig')]).toBe(String(a.players.find(r=>r.playerId==='a')!.points))
+    expect(table.columns).not.toContain('Stig')
+    expect(row[table.columns.indexOf('Unnir leikir')]).toBe(String(a.players.find(r=>r.playerId==='a')!.smallWins))
+    expect(row[table.columns.indexOf('Kvöld með leikjagögnum')]).toBe('0 af 1')
     expect(row[2]).toBe(`${100*a.players[0].setWins/a.totals.sets}%`)
     expect(()=>buildPresentation(data,season,{...options,startsOn:'2026-10-29'})).toThrow()
   })

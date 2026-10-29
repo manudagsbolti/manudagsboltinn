@@ -43,13 +43,13 @@ it('marks aggregate draws unknown and derives sweeps without inventing game coun
   expect(a.totals.drawsIncomplete).toBe(true)
   expect(a.players.find(p=>p.playerId==='a')).toMatchObject({sweeps:1,drawsIncomplete:true,miniGames:0})
   expect(a.players.find(p=>p.playerId==='b')).toMatchObject({sweeps:0,nixDays:1})
-  expect(playerGameRecord(a.players.find(p=>p.playerId==='a')!)).toEqual({played:'—',draws:'—',wins:'8'})
+  expect(playerGameRecord(a.players.find(p=>p.playerId==='a')!)).toEqual({played:'Óskráð',draws:'Óskráð',wins:'8',coverage:'0 af 1'})
 })
 it('keeps unknown substitute games out of the regular game record',()=>{
   const data=fixture()
   data.sessions.push({...data.sessions[0],id:'legacy',playedOn:'2026-09-14'})
   data.attendance.push({sessionId:'legacy',playerId:'a',roleAtSession:'SUBSTITUTE'})
   data.backfills=[{sessionId:'legacy',sourceKind:'AGGREGATE',assistsRecorded:false,teams:[{code:'A',name:'A',color:'red',playerIds:['a']},{code:'B',name:'B',color:'blue',playerIds:['b']}],rounds:[{roundNo:1,teamGoals:{A:4,B:3}}],playerGoals:[],createdAt:'',updatedAt:''}]
-  expect(playerGameRecord(buildSeasonAnalytics(data,season,'REGULAR').players.find(p=>p.playerId==='a')!)).toEqual({played:'5',draws:'1',wins:'4'})
-  expect(playerGameRecord(buildSeasonAnalytics(data,season,'ALL').players.find(p=>p.playerId==='a')!)).toEqual({played:'—',draws:'1+',wins:'8'})
+  expect(playerGameRecord(buildSeasonAnalytics(data,season,'REGULAR').players.find(p=>p.playerId==='a')!)).toEqual({played:'5',draws:'1',wins:'4',coverage:'1 af 1'})
+  expect(playerGameRecord(buildSeasonAnalytics(data,season,'ALL').players.find(p=>p.playerId==='a')!)).toEqual({played:'5',draws:'1',wins:'8',coverage:'1 af 2'})
 })

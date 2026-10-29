@@ -16,8 +16,8 @@ Sami hluti appsins heldur utan um bæði miðannamöt og lokahóf. Stjórnandi v
   stöðvuð þar til verðlaunasætin hafa verið leyst.
 - Sópararnir: sérstök heiðursglæra með fjölda og dagsetningum kvölda þar sem
   öll sett unnust. Ólokið/óunnið spilað sett útilokar sópun.
-- Jafntefli og skráð fyrirliðasett sjást í tölfræðitöflunni. + við jafntefli er
-  aðeins þekktur lágmarksfjöldi ef hluta eldri gagna vantar.
+- Jafntefli og skráð fyrirliðasett sjást í tölfræðitöflunni. Jafntefli telja
+  nákvæmlega skráð kvöld; dálkur sýnir hversu mörg kvöld liggja að baki.
 - Í stjórnandakynningu opnar Pallborð hliðarspjald. Vista má ný umræðuefni
   án niðurstöðu eða bæta við niðurstöðu á staðnum. Lokun fer á sömu glæru.
   Ný umræðuefni sjást á pallborðsglærunni í stjórnandasýn og geymast í sér
@@ -49,8 +49,8 @@ Fyrirmyndir lesnar á Drive: Mánudagsboltinn-2025-02-mid.pptx (haust 2025) og M
 Velja má upphafsdag og lokadag gagna (báðir telja með). Sjálfgefið upphaf er
 upphaf valinnar annar. Listi sýnir hvaða kláruðu kvöld telja úr gögnum á tækinu;
 samstilla þarf fyrst ef önnur tæki hafa nýrri samþykkt gögn. Tölfræðisíðan hefur
-sömu dagasíu og val um ABS eða stig í smáleikjum. Stig eru einnig sér dálkur í
-kynningartöflunni; þau eru ekki unnin sett eða ABS. ABS notar öll spiluð sett
+sömu dagasíu og raðanlega dálka. Unnir leikir eru ekki unnin sett eða ABS;
+tvítekinn stigadálkur hefur verið tekinn út. ABS notar öll spiluð sett
 valins tímabils, án óbyrjaðra undirbúningssetta. Nýjar kynningar sýna tímabil,
 kvöldafjölda og sett. Eldri útgáfur haldast óbreyttar; búa þarf til nýja kynningu
 til að nota breytt tímabil.
@@ -58,10 +58,14 @@ til að nota breytt tímabil.
 ## Tölfræði
 
 Stöðuglæran og varamannataflan sýna Spilaðir leikir, Jafntefli og Unnir leikir
-saman, eins og tölfræðisíðan. Þessi þrjú telja smáleiki, ekki sett. Sama
-framsetning notar — þegar eldri gögn vantar heildarleikjafjölda/jafntefli og +
-fyrir þekktan lágmarksfjölda jafntefla á blönduðu tímabili. Hlutverkssían ræður
-gagnaþekjunni líka: kvöld sem varamaður gerir ekki fastamannatölur óþekktar.
+saman, eins og tölfræðisíðan. Þessi þrjú telja smáleiki, ekki sett. Stig eru
+ekki endurtekin sem annar dálkur við hlið unninna leikja. Leikir og jafntefli
+sýna tölur úr nákvæmri skráningu, án plúss; Kvöld með leikjagögnum sýnir
+fjölda nákvæmlega skráðra kvölda af mætingum leikmannsins. Þegar engin slík
+kvöld eru til stendur Óskráð. Unnir leikir innihalda líka þekkta sigra úr
+samantektum. Tölurnar hafa því ólíka þekju ef eldri samantektir eru með.
+Hlutverkssían ræður þekjunni: kvöld sem varamaður dregur ekki úr þekju í
+fastamannatöflunni. Enginn heildarleikjafjöldi er áætlaður úr liðsstigum.
 
 Nix (staðfest 29. október 2026): eitt mætt og spilað kvöld án unnins setts,
 jafnvel þótt leikmaður fái stig úr smáleikjum. Telst einu sinni á kvöld, ekki
@@ -70,10 +74,10 @@ tölfræðitöflu, kvöldasundurliðun og nýjum kynningum. Eldri útgefnar kynn
 eru frystar og þarf að gefa út nýja útgáfu til að nota leiðrétta skilgreiningu.
 
 Tölfræðiyfirlitið sýnir alla leikmenn í einni töflu með ABS-röðun sjálfgefið.
-Dálkar eru raðanlegir og innihalda unnin/spiluð sett, ABS, ADJ, stig,
-smáleikjasigra/leiki, mörk, assist, G+A, sjálfsmörk, choke, nix, 0-sett,
+Dálkar eru raðanlegir og innihalda unnin/spiluð sett, ABS, ADJ,
+unna/spilaða leiki, jafntefli, gagnaþekju, mörk, assist, G+A, sjálfsmörk, choke, nix, 0-sett,
 kvöld, mætingu og rating. Smellur á leikmann sýnir kvöldin að baki tölunum
-með tengli á hvert kvöld. Óþekktur smáleikjafjöldi í aggregate gögnum er strik.
+með tengli á hvert kvöld. Ef engin nákvæm leikjagögn eru til stendur Óskráð.
 
 ABS = unnin sett / öll spiluð sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Aðalkeppni telur aðeins hlutverk REGULAR á hverju kvöldi; varamenn eru sér. Mæting og síðan stig úr smáleikjum skera úr jöfnu ABS. Verðlaun eru þrjú efstu sætin, einn í hverju sæti. Heildartaflan heldur sömu röðun og tölum.
 

@@ -12,6 +12,7 @@ export interface SeasonPlayerAnalytics {
   ownGoals: number
   draws: number
   drawsIncomplete: boolean
+  recordedGameNights: number
   sweeps: number
   captainSets: number
   points: number
@@ -77,9 +78,9 @@ export function compareCompetitionPlayers(a:SeasonPlayerAnalytics,b:SeasonPlayer
   return b.setWins-a.setWins||b.sessions-a.sessions||b.points-a.points
 }
 
-export function playerGameRecord(row:Pick<SeasonPlayerAnalytics,'miniGames'|'smallWins'|'draws'|'drawsIncomplete'>){
-  // Aggregate backfills know wins but not all games/draws, including mixed periods.
-  return {played:row.drawsIncomplete?'—':String(row.miniGames),draws:row.drawsIncomplete?(row.draws?`${row.draws}+`:'—'):String(row.draws),wins:String(row.smallWins)}
+export function playerGameRecord(row:Pick<SeasonPlayerAnalytics,'miniGames'|'smallWins'|'draws'|'recordedGameNights'|'sessions'>){
+  // Keep known facts visible; coverage states exactly which nights they cover.
+  return {played:row.recordedGameNights?String(row.miniGames):'Óskráð',draws:row.recordedGameNights?String(row.draws):'Óskráð',wins:String(row.smallWins),coverage:`${row.recordedGameNights} af ${row.sessions}`}
 }
 
 export function seasonStartYearForDate(dateIso: string): number {
@@ -124,7 +125,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
     let row = aggregate.get(playerId)
     if (!row) {
       row = {
-        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, miniGames: 0, ownGoals: 0, draws: 0, drawsIncomplete: false, sweeps: 0, captainSets: 0, points: 0, goals: 0, assists: 0,
+        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, miniGames: 0, ownGoals: 0, draws: 0, drawsIncomplete: false, recordedGameNights: 0, sweeps: 0, captainSets: 0, points: 0, goals: 0, assists: 0,
         contributions: 0, chokes: 0, zeroPointSets: 0, nixDays: 0, pointsPerNight: 0, pointsPerSet: 0,
         contributionsPerNight: 0, setWinRate: 0, chokeRate: 0, bestNightPoints: 0, bestNightGoals: 0,
         bestNightAssists: 0, scoringNights: 0, rating: 100,
@@ -160,6 +161,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
       row.miniGames += night.miniGames
       row.ownGoals += night.ownGoals
       row.drawsIncomplete ||= !!backfill
+      if(!backfill)row.recordedGameNights++
       row.draws += games.filter(g=>g.status==='completed'&&g.endReason==='timeout'&&!g.winningTeamId&&memberships.some(m=>m.playerId===night.playerId&&m.setId===g.setId&&(m.teamId===g.holderTeamId||m.teamId===g.challengerTeamId))).length
       if(fullNightSets>0&&completedSets===fullNightSets&&night.setWins===fullNightSets)row.sweeps++
       row.captainSets += teams.filter(t=>t.captainPlayerId===night.playerId&&playedSets.some(s=>s.id===t.setId)).length
