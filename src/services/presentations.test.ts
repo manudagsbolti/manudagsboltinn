@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
-import { buildPresentation, sections } from './presentations'
+import { buildPresentation, publishPresentation, sections } from './presentations'
 import { buildSeasonAnalytics, type AnalyticsData } from './seasonAnalytics'
 import type { Season, Session } from '../domain/types'
 import migration from '../../supabase/migrations/018_presentations.sql?raw'
@@ -14,6 +14,30 @@ function fixture():AnalyticsData {
 }
 const options={title:'Miðannamat',kind:'midterm' as const,eventDate:'2026-10-29',cutoff:'2026-10-28',sections:sections.map(([key])=>key),minimumPairSets:1,discussion:'Mæting'}
 describe('event publications',()=>{
+  it('prevents publication of unresolved medal ties and rejects duplicate final selections',async()=>{
+    const p=buildPresentation(fixture(),season,options)
+    await expect(publishPresentation(p)).rejects.toThrow('úrslitaröð')
+    expect(()=>buildPresentation(fixture(),season,{...options,finalTieOrder:['a','a']})).toThrow('fleiri en einu')
+    const resolved=buildPresentation(fixture(),season,{...options,finalTieOrder:['b','a']})
+    expect(resolved.pendingTieGroups).toBeUndefined()
+    expect(resolved.slides.find(s=>s.title==='1. sæti')?.rows[0][0]).toBe('b')
+  })
+  it('breaks ABS ties by attendance then mini-game points and only calls out attendance below 50%',()=>{
+    const data=fixture()
+    data.players.push({id:'d',name:'d',isActive:true,createdAt:'',updatedAt:''})
+    data.sessions=[session('one','2026-09-07'),session('two','2026-09-14'),session('three','2026-09-21')]
+    data.attendance=[...['a','b','c'].map(playerId=>({sessionId:'one',playerId,roleAtSession:'REGULAR' as const})),...['b','c'].map(playerId=>({sessionId:'two',playerId,roleAtSession:'REGULAR' as const}))]
+    const first=data.backfills![0]
+    first.teams=[{code:'A',name:'A',color:'red',playerIds:['a','b','c']},{code:'B',name:'B',color:'blue',playerIds:['d']}]
+    first.rounds=[{roundNo:1,teamGoals:{A:4,B:0}}]
+    data.backfills!.push({...structuredClone(first),sessionId:'two',teams:[{code:'A',name:'A',color:'red',playerIds:['d']},{code:'B',name:'B',color:'blue',playerIds:['b']},{code:'C',name:'C',color:'green',playerIds:['c']}],rounds:[{roundNo:1,teamGoals:{A:4,B:2,C:3}}]})
+    const p=buildPresentation(data,season,options)
+    expect(p.pendingTieGroups).toBeUndefined()
+    expect(p.slides.find(s=>s.title==='Staðan')?.rows.map(r=>r[0])).toEqual(['c','b','a'])
+    expect(p.slides.filter(s=>s.story?.kind==='podium').map(s=>s.rows[0][0])).toEqual(['a','b','c'])
+    expect(p.slides.find(s=>s.title==='Versta mæting')?.rows.map(r=>r[0])).toEqual(['a'])
+    expect(p.slides.find(s=>s.title==='Besta mæting')?.rows).toHaveLength(3)
+  })
   it('shows the same nonzero nix total in analytics, standings and award reveals',()=>{
     const data=fixture()
     data.backfills![0].rounds=[{roundNo:1,teamGoals:{A:4,B:3}},{roundNo:2,teamGoals:{A:4,B:2}}]
@@ -54,7 +78,9 @@ describe('event publications',()=>{
     expect(table.columns.slice(4,7)).toEqual(['Mörk','Assist','G+A'])
     expect(table.rows[0].slice(4,7)).toEqual(['4','0','4'])
     expect(table.notice).toContain('aðeins skráð framlag')
-    expect(p.slides.find(s=>s.title==='1. sæti'&&s.story?.finale)?.rows).toHaveLength(2)
+    expect(p.pendingTieGroups?.[0].playerIds).toEqual(['a','b'])
+    const resolved=buildPresentation(data,season,{...options,finalTieOrder:['a','b']})
+    expect(resolved.slides.find(s=>s.title==='1. sæti'&&s.story?.finale)?.rows).toHaveLength(1)
     expect(p.slides.find(s=>s.title==='Varamenn')?.rows[0][0]).toBe('c')
     expect(p.slides.find(s=>s.title==='Besta pörunin')?.rows[0].slice(1,4)).toEqual(['1','2','50%'])
     data.players[0].name='Changed'; data.backfills![0].rounds[0].teamGoals.A=0
@@ -69,7 +95,7 @@ describe('event publications',()=>{
     expect(()=>buildPresentation(fixture(),season,{...options,cutoff:'2026-10-01'})).toThrow()
     expect(()=>buildPresentation(fixture(),season,{...options,cutoff:'2026-11-01'})).toThrow()
   })
-  it('retains every never/often pair across pages, while best pairs stay top five',()=>{
+  it('retains never pairs, defaults to twenty candidate pairs and keeps often together on one page',()=>{
     const data=fixture()
     data.players=Array.from({length:8},(_,i)=>({id:`p${i}`,name:`Player ${i}`,isActive:true,createdAt:'',updatedAt:''}))
     data.attendance=data.players.map(p=>({sessionId:'one',playerId:p.id,roleAtSession:'REGULAR'}))
@@ -79,16 +105,36 @@ describe('event publications',()=>{
     const rows=(prefix:string)=>p.slides.filter(s=>s.title.startsWith(prefix)).flatMap(s=>s.rows)
     expect(rows('Aldrei saman')).toHaveLength(16)
     expect(rows('Oftast saman')).toHaveLength(12)
-    expect(rows('Besta pörunin')).toHaveLength(5)
+    expect(rows('Besta pörunin')).toHaveLength(12)
+    expect(buildPresentation(data,season,{...options,pairLimit:5}).slides.find(s=>s.title==='Besta pörunin')?.rows).toHaveLength(5)
     expect(p.slides.filter(s=>s.title.startsWith('Oftast saman'))).toHaveLength(1)
   })
-  it('builds ascending award reveals and bronze/silver/gold groups including all ties',()=>{
+  it('shows twenty voting choices with game counts, limits often pairs and includes all perfect attendance ties',()=>{
+    const data=fixture()
+    data.players=Array.from({length:15},(_,i)=>({id:`p${i}`,name:`Player ${i}`,isActive:true,createdAt:'',updatedAt:''}))
+    data.attendance=data.players.map(p=>({sessionId:'one',playerId:p.id,roleAtSession:'REGULAR'}))
+    data.backfills![0].teams[0].playerIds=data.players.slice(0,8).map(p=>p.id)
+    data.backfills![0].teams[1].playerIds=data.players.slice(8).map(p=>p.id)
+    const p=buildPresentation(data,season,options)
+    for(const title of ['Besta pörunin','Versta pörunin','Oftast saman']){
+      const slides=p.slides.filter(s=>s.title.startsWith(title))
+      expect(slides).toHaveLength(1)
+      expect(slides[0].rows).toHaveLength(20)
+      expect(slides[0].columns).toContain('Leikir')
+      expect(slides[0].rows[0][slides[0].columns.indexOf('Leikir')]).toBe('—')
+    }
+    expect(p.slides.find(s=>s.title==='Besta mæting')?.rows).toHaveLength(15)
+  })
+  it('keeps tied choke groups but assigns each podium place to a single resolved player',()=>{
     const data=fixture()
     data.players=Array.from({length:6},(_,i)=>({id:`p${i}`,name:`Player ${i}`,isActive:true,createdAt:'',updatedAt:''}))
     data.attendance=data.players.map(p=>({sessionId:'one',playerId:p.id,roleAtSession:'REGULAR'}))
     data.backfills![0].teams=([ 'A','B','C'] as const).map((code,i)=>({code,name:code,color:'red',playerIds:data.players.slice(i*2,i*2+2).map(p=>p.id)}))
     data.backfills![0].rounds=[{roundNo:1,teamGoals:{A:4,B:3,C:0}},{roundNo:2,teamGoals:{A:4,B:3,C:0}},{roundNo:3,teamGoals:{A:3,B:4,C:0}}]
-    const p=buildPresentation(data,season,options)
+    const unresolved=buildPresentation(data,season,options)
+    expect(unresolved.pendingTieGroups).toHaveLength(2)
+    expect(unresolved.slides.filter(s=>s.story?.kind==='podium').every(s=>s.rows.length===0)).toBe(true)
+    const p=buildPresentation(data,season,{...options,finalTieOrder:['p0','p1','p2']})
     const choke=p.slides.filter(s=>s.story?.kind==='choke')
     expect(choke.map(s=>s.story?.value)).toEqual(['1 choke','2 choke'])
     expect(choke.every(s=>s.story?.phase==='reveal')).toBe(true)
@@ -96,13 +142,14 @@ describe('event publications',()=>{
     expect(choke.at(-1)?.rows.map(r=>r[0])).toEqual(['Player 2','Player 3'])
     const podium=p.slides.filter(s=>s.story?.kind==='podium')
     expect(podium.map(s=>s.story?.rank)).toEqual([3,2,1])
-    expect(podium.map(s=>s.rows.length)).toEqual([2,2,2])
+    expect(podium.map(s=>s.rows.length)).toEqual([1,1,1])
+    expect(podium.map(s=>s.rows[0][0])).toEqual(['Player 2','Player 1','Player 0'])
     expect(podium).toHaveLength(3)
     const nix=p.slides.filter(s=>s.story?.kind==='nix')
     expect(nix).toHaveLength(1)
     expect(nix[0].rows.map(r=>r[0])).toEqual(['Player 4','Player 5'])
     expect(podium.at(-1)?.story?.finale).toBe(true)
-    expect(podium.at(-1)?.rows.map(r=>r[0])).toEqual(['Player 0','Player 1'])
+    expect(podium.at(-1)?.rows.map(r=>r[0])).toEqual(['Player 0'])
     expect(p.slides.some(s=>s.title==='4. sæti')).toBe(false)
   })
   it('keeps all fifteen regulars together on the final standings slide',()=>{

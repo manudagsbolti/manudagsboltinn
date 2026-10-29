@@ -1,5 +1,5 @@
 import { DeleteNight } from './DeleteNight'
-import { randomCaptain } from '../domain/captains'
+import { chooseRegularCaptain } from '../domain/captains'
 import { CaptainBadge } from './CaptainBadge'
 import { NewSessionScreen } from './NewSessionScreen'
 import { useEffect, useMemo, useState } from 'react'
@@ -25,6 +25,8 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
     const sets = await db.sets.where('sessionId').equals(sessionId).sortBy('setNo')
     return {
       session,
+      attendance,
+      previousCaptains: sets.length? (await db.setTeams.where('setId').equals(sets.at(-1)!.id).sortBy('sortOrder')).map(t=>t.captainPlayerId):[],
       season: session.seasonId ? await db.seasons.get(session.seasonId) : undefined,
       players: players as NonNullable<(typeof players)[number]>[],
       setNo: sets.length + 1,
@@ -58,7 +60,7 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
   })
   const chooseCaptains = (next: Record<string, number>) => setCaptains(Object.fromEntries(Array.from({length:teamCount},(_,team)=>{
     const ids = Object.keys(next).filter(id=>next[id]===team)
-    return [team,ids.length?randomCaptain(ids):'']
+    return [team,chooseRegularCaptain(ids,data?.attendance.filter(a=>a.roleAtSession==='REGULAR').map(a=>a.playerId)??[],data?.previousCaptains[team])??'']
   })))
   const movePlayer = (playerId: string, team: number) => {
     if (assignments[playerId]===team) return
@@ -137,12 +139,13 @@ export function TeamSetupScreen({ sessionId, onReady, onCancel, recorder = false
       <div className="split-toolbar"><button disabled={shuffling} onClick={()=>{setStage('roster')}}>← Hópur</button><div className="split-mode-pill">{splitMode==='weighted'?'⚖ Weighted random':'🎲 Full random'}</div><button className="shuffle-button" disabled={shuffling} onClick={()=>void split()}>⤨ Draga aftur</button></div>
       {shuffling ? <div className="shuffle-stage card"><div className="shuffle-orb">⤨</div><h2>Drögum í lið…</h2><div className="shuffle-names">{players.slice(0,6).map((p,i)=><span key={p.id} style={{animationDelay:`${i*70}ms`}}>{p.name}</span>)}</div></div> : <>
         <p className="setup-hint">Liðin eru tillaga. Þú getur fært leikmann handvirkt með litapunktunum áður en settið hefst.</p>
-        <p className="setup-hint"><CaptainBadge/> Fyrirliðar haldast hjá óbreyttum liðum milli setta. Ef hópum er breytt er dregið aftur.</p>
+        <p className="setup-hint"><CaptainBadge/> Aðeins fastamenn geta verið fyrirliðar. Veldu fyrirliða hér eða láttu dráttinn ráða. Nýr dráttur forðast síðasta fyrirliða ef annar fastamaður er í liðinu.</p>
         <p className="setup-hint">Veldu lit við hvert lið. Litaskipti halda leikmönnum og fyrirliðum saman. Veldu síðan hvaða lið byrja inni hér fyrir neðan.</p>
         <div className={`team-setup-grid cols-${teamCount}`}>
           {teams.map((team, teamIndex) => <section className="team-column card" key={teamIndex} style={{ '--team-color': team.color } as React.CSSProperties}>
             <header><span className="team-dot"/><div><strong>{team.name}</strong><small>{counts[teamIndex]} leikmenn{!recorder && ` · styrkur ${teamStrength(assignments,teamIndex,ratings)}`}</small></div></header>
             <label className="team-color-choice">Litur liðs {teamIndex + 1}<select value={colors[teamIndex]} onChange={event => changeColor(teamIndex, Number(event.target.value))}>{TEAM_PRESETS.map((preset, index) => <option key={preset.name} value={index}>{preset.name}</option>)}</select></label>
+            <label className="team-color-choice">Fyrirliði<select aria-label={`Fyrirliði liðs ${teamIndex+1}`} value={captains[teamIndex]??''} onChange={e=>setCaptains(c=>({...c,[teamIndex]:e.target.value}))}>{!captains[teamIndex]&&<option value="">Enginn fastamaður í liðinu</option>}{players.filter(p=>assignments[p.id]===teamIndex&&data.attendance.some(a=>a.playerId===p.id&&a.roleAtSession==='REGULAR')).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
             <div className="team-members">
               {players.filter(p => assignments[p.id] === teamIndex).map(player => <div className="assignment-player" key={player.id}><span>{captains[teamIndex]===player.id && <CaptainBadge/>}{player.name}</span><div className="mini-team-switch">{teams.map((preset, idx) => <button key={preset.name} title={`Færa í ${preset.name}`} className={idx === teamIndex ? 'current' : ''} style={{ background: preset.color }} onClick={() => movePlayer(player.id,idx)}/>)}</div></div>)}
             </div>

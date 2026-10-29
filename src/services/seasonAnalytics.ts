@@ -10,6 +10,10 @@ export interface SeasonPlayerAnalytics {
   smallWins: number
   miniGames: number
   ownGoals: number
+  draws: number
+  drawsIncomplete: boolean
+  sweeps: number
+  captainSets: number
   points: number
   goals: number
   assists: number
@@ -51,6 +55,8 @@ export interface SeasonAnalytics {
     games: number
     goals: number
     players: number
+    draws: number
+    drawsIncomplete: boolean
   }
 }
 
@@ -64,6 +70,11 @@ export type AnalyticsData = {
   games: Game[]
   goals: Goal[]
   backfills?: SessionBackfill[]
+}
+
+// All players share the same ABS denominator; comparing wins is exact.
+export function compareCompetitionPlayers(a:SeasonPlayerAnalytics,b:SeasonPlayerAnalytics){
+  return b.setWins-a.setWins||b.sessions-a.sessions||b.points-a.points
 }
 
 export function seasonStartYearForDate(dateIso: string): number {
@@ -108,7 +119,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
     let row = aggregate.get(playerId)
     if (!row) {
       row = {
-        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, miniGames: 0, ownGoals: 0, points: 0, goals: 0, assists: 0,
+        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, miniGames: 0, ownGoals: 0, draws: 0, drawsIncomplete: false, sweeps: 0, captainSets: 0, points: 0, goals: 0, assists: 0,
         contributions: 0, chokes: 0, zeroPointSets: 0, nixDays: 0, pointsPerNight: 0, pointsPerSet: 0,
         contributionsPerNight: 0, setWinRate: 0, chokeRate: 0, bestNightPoints: 0, bestNightGoals: 0,
         bestNightAssists: 0, scoringNights: 0, rating: 100,
@@ -128,6 +139,9 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
     const localGameIds = new Set(games.map(g => g.id))
     const goals = seasonGoals.filter(g => localGameIds.has(g.gameId))
     const backfill = data.backfills?.find(item => item.sessionId === session.id)
+    const playedSets=sets.filter(s=>s.status==='completed'||games.some(g=>g.setId===s.id&&g.startedAt))
+    const completedSets=backfill?backfill.rounds.length:sets.filter(s=>s.status==='completed'&&s.winningTeamId).length
+    const fullNightSets=backfill?backfill.rounds.length:playedSets.length
     const stats = (backfill ? calculateBackfillPlayerStats(backfill) : calculateSessionPlayerStats({
       playerIds: ids, sets, teams, memberships, games, goals,
       winsPerPoint: session.winsPerPoint, pointsToWinSet: session.pointsToWinSet,
@@ -140,6 +154,10 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
       row.smallWins += night.smallWins
       row.miniGames += night.miniGames
       row.ownGoals += night.ownGoals
+      row.drawsIncomplete ||= !!backfill
+      row.draws += games.filter(g=>g.status==='completed'&&g.endReason==='timeout'&&!g.winningTeamId&&memberships.some(m=>m.playerId===night.playerId&&m.setId===g.setId&&(m.teamId===g.holderTeamId||m.teamId===g.challengerTeamId))).length
+      if(fullNightSets>0&&completedSets===fullNightSets&&night.setWins===fullNightSets)row.sweeps++
+      row.captainSets += teams.filter(t=>t.captainPlayerId===night.playerId&&playedSets.some(s=>s.id===t.setId)).length
       row.points += night.points
       row.goals += night.goals
       row.assists += night.assists
@@ -176,6 +194,8 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
       games: seasonGames.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.rounds.reduce((roundSum, round) => roundSum + Object.values(round.teamGoals).reduce((goalSum, goals) => goalSum + (goals ?? 0), 0), 0), 0),
       goals: seasonGoals.length + (data.backfills ?? []).filter(item => sessionIds.has(item.sessionId)).reduce((sum, item) => sum + item.playerGoals.reduce((goalSum, row) => goalSum + row.goals, 0), 0),
       players: rows.length,
+      draws: seasonGames.filter(g=>g.status==='completed'&&g.endReason==='timeout'&&!g.winningTeamId).length,
+      drawsIncomplete: !!data.backfills?.some(b=>sessionIds.has(b.sessionId)),
     },
   }
 }
@@ -246,6 +266,8 @@ function buildAwards(rows: SeasonPlayerAnalytics[]): SeasonAward[] {
   const bigNight=max(r=>r.bestNightPoints), bigGoals=max(r=>r.bestNightGoals), rating=max(r=>r.rating)
   add('points','🏆','Stigakóngurinn',points,`${points?.points ?? 0} stig`,'Flest stig á tímabilinu','gold')
   add('sets','👑','Settameistarinn',setWins,`${setWins?.setWins ?? 0} sett`,'Flest unnin sett','gold')
+  const sweeper=max(r=>r.sweeps)
+  add('sweeps','🧹','Sóparinn',sweeper?.sweeps?sweeper:undefined,`${sweeper?.sweeps??0} sópanir`,'Vann öll sett kvöldsins','gold')
   add('goals','⚽','Markakóngurinn',goals,`${goals?.goals ?? 0} mörk`,'Flest mörk','good')
   add('assists','🅰️','Stoðsendingakóngurinn',assists,`${assists?.assists ?? 0} stoðs.`,'Flestar stoðsendingar','good')
   add('contrib','🔥','Framlag ársins',contrib,`${contrib?.contributions ?? 0} G+A`,'Mörk + stoðsendingar','good')

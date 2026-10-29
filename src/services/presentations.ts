@@ -1,12 +1,13 @@
 import type { Season } from '../domain/types'
 import { buildSetTeamStats } from '../domain/rules'
-import { buildSeasonAnalytics, type AnalyticsData } from './seasonAnalytics'
+import { buildSeasonAnalytics, compareCompetitionPlayers, type AnalyticsData } from './seasonAnalytics'
 import { db } from '../db/localDb'
 import { supabase } from '../lib/supabase'
 
 export const sections = [
   ['facts','Nokkrar staðreyndir'], ['best','Besta pörunin'], ['worst','Versta pörunin'],
   ['never','Aldrei saman'], ['often','Oftast saman'], ['attendance','Besta og versta mæting'],
+  ['sweeps','Sóparar — öll sett unnin á kvöldi'],
   ['choke','Kafnarinn'], ['goals','Marka hrókarnir'], ['nix','Nixarinn'],
   ['subs','Varamenn'], ['podium','Verðlaunasæti'], ['table','Staðan'],
   ['extra','Viðbót: stoðsendingar og kvöldmet'], ['discussion','Pallborðsumræða'],
@@ -22,6 +23,7 @@ export interface Presentation {
   id: string; title: string; seasonId: string; eventDate: string; cutoff: string; startsOn?: string
   kind: 'midterm' | 'final'; publishedAt: string; schemaVersion: 1
   slides: Slide[]; source?: AnalyticsData & { season: Season }
+  pendingTieGroups?: {playerIds:string[];places:number[]}[]
 }
 export async function readPresentationData() {
   return db.transaction('r', [db.seasons,db.players,db.sessions,db.sessionPlayers,db.sets,db.setTeams,db.setTeamMembers,db.games,db.goals,db.sessionBackfills], async () => ({
@@ -32,10 +34,12 @@ export async function readPresentationData() {
   }))
 }
 export function buildPresentation(data: AnalyticsData, season: Season, options: {
-  title: string; kind: Presentation['kind']; eventDate: string; cutoff: string; startsOn?: string; sections: SectionKey[]; minimumPairSets: number; discussion: string
+  title: string; kind: Presentation['kind']; eventDate: string; cutoff: string; startsOn?: string; sections: SectionKey[]; minimumPairSets: number; pairLimit?: 5|10|20; finalTieOrder?:string[]; discussion: string
 }): Presentation {
   if (!options.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(options.eventDate) || !/^\d{4}-\d{2}-\d{2}$/.test(options.cutoff) || options.cutoff > options.eventDate) throw new Error('Athugaðu heiti, viðburðardag og lokadag gagna.')
   if (!Number.isInteger(options.minimumPairSets) || options.minimumPairSets < 1) throw new Error('Lágmark para þarf að vera heil tala, a.m.k. 1.')
+  const pairLimit=options.pairLimit??20
+  if(![5,10,20].includes(pairLimit))throw new Error('Veldu 5, 10 eða 20 pör.')
   const startsOn = options.startsOn ?? season.startsOn
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn) || startsOn > options.cutoff) throw new Error('Upphafsdagur þarf að vera fyrir eða á lokadegi gagna.')
   const sessions = buildSeasonAnalytics(data, season, 'ALL', { startsOn, endsOn: options.cutoff }).sessions
@@ -53,36 +57,38 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
   const pct = (a:number,b:number)=>b ? `${(100*a/b).toLocaleString('is-IS',{maximumFractionDigits:1})}%` : '—'
   const totalSets = all.totals.sets
   const regularIds = [...new Set(attendance.filter(a=>a.roleAtSession==='REGULAR').map(a=>a.playerId))].sort((a,b)=>name(a).localeCompare(name(b),'is'))
-  const pairs = new Map<string,{ids:string[]; played:number; wins:number; goals:number; chokes:number}>()
-  for(let i=0;i<regularIds.length;i++)for(let j=i+1;j<regularIds.length;j++)pairs.set(JSON.stringify([regularIds[i],regularIds[j]]),{ids:[regularIds[i],regularIds[j]],played:0,wins:0,goals:0,chokes:0})
-  const addTeam = (sessionId:string, ids:string[], wins:boolean, goals:number, choke:boolean)=>{
+  const pairs = new Map<string,{ids:string[]; played:number; wins:number; goals:number; chokes:number; games:number|null}>()
+  for(let i=0;i<regularIds.length;i++)for(let j=i+1;j<regularIds.length;j++)pairs.set(JSON.stringify([regularIds[i],regularIds[j]]),{ids:[regularIds[i],regularIds[j]],played:0,wins:0,goals:0,chokes:0,games:0})
+  const addTeam = (sessionId:string, ids:string[], wins:boolean, goals:number, choke:boolean, gameCount:number|null)=>{
     const eligible = ids.filter(id=>attendance.some(a=>a.sessionId===sessionId&&a.playerId===id&&a.roleAtSession==='REGULAR'))
-    for(const pair of pairs.values())if(pair.ids.every(id=>eligible.includes(id))){pair.played++;pair.wins+=Number(wins);pair.goals+=goals;pair.chokes+=Number(choke)}
+    for(const pair of pairs.values())if(pair.ids.every(id=>eligible.includes(id))){pair.played++;pair.wins+=Number(wins);pair.goals+=goals;pair.chokes+=Number(choke);pair.games=pair.games===null||gameCount===null?null:pair.games+gameCount}
   }
   for(const set of sets){
     const localGames=games.filter(g=>g.setId===set.id)
     if(set.status!=='completed'&&!localGames.some(g=>g.startedAt))continue
     const session=sessions.find(s=>s.id===set.sessionId)!
     for(const team of buildSetTeamStats(set,source.teams.filter(t=>t.setId===set.id),localGames,session))
-      addTeam(session.id,source.memberships.filter(m=>m.teamId===team.teamId).map(m=>m.playerId),team.isWinner,team.smallWins,team.isChoke)
+      addTeam(session.id,source.memberships.filter(m=>m.teamId===team.teamId).map(m=>m.playerId),team.isWinner,team.smallWins,team.isChoke,localGames.filter(g=>g.status==='completed'&&(g.holderTeamId===team.teamId||g.challengerTeamId===team.teamId)).length)
   }
   for(const b of source.backfills)for(const round of b.rounds){
     const highest=Math.max(...b.teams.map(t=>round.teamGoals[t.code]??0))
     const leaders=b.teams.filter(t=>(round.teamGoals[t.code]??0)===highest)
-    for(const t of b.teams){const score=round.teamGoals[t.code]??0;const won=highest>=4&&leaders.length===1&&leaders[0].code===t.code;addTeam(b.sessionId,t.playerIds,won,score,!won&&score===3)}
+    for(const t of b.teams){const score=round.teamGoals[t.code]??0;const won=highest>=4&&leaders.length===1&&leaders[0].code===t.code;addTeam(b.sessionId,t.playerIds,won,score,!won&&score===3,null)}
   }
   const periodNote = `${season.name} · Gögn ${startsOn}–${options.cutoff} að báðum dögum meðtöldum · ${sessions.length} kláruð kvöld · ${totalSets} spiluð sett.`
   const slides:Slide[]=[{title:options.title.trim(),note:`Viðburður ${options.eventDate}. ${periodNote} Kvöld: ${sessions.map(s=>s.playedOn).join(', ')}.`,columns:[],rows:[]}]
   const add=(key:SectionKey,title:string,columns:string[],rows:string[][],note?:string,notice?:string)=>{
     if(!options.sections.includes(key))return
-    if (['best','worst','attendance','goals','extra'].includes(key)) {
+    if (['best','worst','often','goals','extra'].includes(key)) {
       const total = rows.length
-      rows = rows.slice(0, 5)
-      if (total > 5) note = `${note ?? ''} Sýndar eru 5 af ${total} niðurstöðum.`.trim()
+      const limit=key==='best'||key==='worst'?pairLimit:key==='often'?20:5
+      rows = rows.slice(0, limit)
+      if (total > limit) note = `${note ?? ''} Sýndar eru ${limit} af ${total} niðurstöðum.`.trim()
     }
-    const pageSize = key === 'table' ? Math.max(1,rows.length) : key === 'never' ? 32 : key === 'often' ? 20 : 8
+    const compact=['table','often','best','worst','attendance','sweeps'].includes(key)
+    const pageSize = compact ? Math.max(1,rows.length) : key === 'never' ? 32 : 8
     const pages=Math.max(1,Math.ceil(rows.length/pageSize))
-    for(let page=0;page<pages;page++)slides.push({title:pages>1?`${title} · ${page+1}/${pages}`:title,columns,rows:rows.slice(page*pageSize,page*pageSize+pageSize),note:note??(rows.length?undefined:'Engin skráð niðurstaða.'),...(notice?{notice}:{}),...(key==='table'||key==='often'?{layout:'compact-table' as const}:key==='never'?{layout:'pair-list' as const}:{})})
+    for(let page=0;page<pages;page++)slides.push({title:pages>1?`${title} · ${page+1}/${pages}`:title,columns,rows:rows.slice(page*pageSize,page*pageSize+pageSize),note:note??(rows.length?undefined:'Engin skráð niðurstaða.'),...(notice?{notice}:{}),...(compact?{layout:'compact-table' as const}:key==='never'?{layout:'pair-list' as const}:{})})
   }
   const common=`${periodNote} Fastamenn eingöngu, samkvæmt hlutverki hvers kvölds. Jafnar tölur eru jafnar niðurstöður.`
   const awardStory = (key: 'choke' | 'nix', title: string, metric: 'chokes' | 'nixDays', unit: string, note: string) => {
@@ -98,31 +104,46 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
       slides.push({ title, columns: ['Leikmaður',unit], rows: members.map(p=>[name(p.playerId),String(value)]), note, story: { kind: key, phase: 'reveal', value: `${value} ${unit}`, caption: highest ? (members.length>1?'Þeir deila þessum vafasama heiðri.':'Hér er meistarinn í þessum flokki!') : (levelIndex===0?'Þetta leit svo vel út…':'En það er hægt að gera enn verr…'), finale: highest } })
     })
   }
-  add('facts','Nokkrar staðreyndir',['Staðreynd','Fjöldi'],[['Kvöld',String(sessions.length)],['Sett',String(totalSets)],['Skráð mörk',String(all.totals.goals)],['Leikmenn',String(all.players.length)],['Varamenn',String(subs.players.length)],['Varamenn sem mættu',subs.players.map(p=>name(p.playerId)).join(', ')||'Engir'],['Mæting fastamanna',pct(regular.players.reduce((n,p)=>n+p.sessions,0),regular.players.length*sessions.length)]],'Mæting miðar við fastamenn með skráða mætingu á tímabilinu × öll kvöld. Mörk telja skráð einstaklingsmörk og sjálfsmörk; eldri liðsmörk geta haft aðra þekju.')
-  const pairRows=(ps:typeof pairs extends Map<string,infer P>?P[]:never)=>ps.map(p=>[p.ids.map(name).join(' + '),String(p.wins),String(p.played),pct(p.wins,p.played),String(p.goals),String(p.chokes)])
+  add('facts','Nokkrar staðreyndir',['Staðreynd','Fjöldi'],[['Kvöld',String(sessions.length)],['Sett',String(totalSets)],['Jafntefli',all.totals.drawsIncomplete?(all.totals.draws?String(all.totals.draws)+'+':'—'):String(all.totals.draws)],['Skráð mörk',String(all.totals.goals)],['Leikmenn',String(all.players.length)],['Varamenn',String(subs.players.length)],['Varamenn sem mættu',subs.players.map(p=>name(p.playerId)).join(', ')||'Engir'],['Mæting fastamanna',pct(regular.players.reduce((n,p)=>n+p.sessions,0),regular.players.length*sessions.length)]],'Mæting miðar við fastamenn með skráða mætingu á tímabilinu × öll kvöld. Mörk telja skráð einstaklingsmörk og sjálfsmörk; eldri liðsmörk geta haft aðra þekju.')
+  const pairRows=(ps:typeof pairs extends Map<string,infer P>?P[]:never)=>ps.map(p=>[p.ids.map(name).join(' + '),String(p.wins),String(p.played),pct(p.wins,p.played),String(p.goals),p.games===null?'—':String(p.games),String(p.chokes)])
   const eligible=[...pairs.values()].filter(p=>p.played>=options.minimumPairSets)
-  const pairNote=`${common} Lágmark ${options.minimumPairSets} sameiginleg sett. Hlutfall = unnin / sameiginleg sett. Mörk = sigrar í smáleikjum (eldri gögn: liðsmörk).`
-  add('best','Besta pörunin',['Par','Sigrar','Sett','Hlutfall','Mörk','Choke'],pairRows([...eligible].sort((a,b)=>b.wins/b.played-a.wins/a.played||b.played-a.played)),pairNote)
-  add('worst','Versta pörunin',['Par','Sigrar','Sett','Hlutfall','Mörk','Choke'],pairRows([...eligible].sort((a,b)=>a.wins/a.played-b.wins/b.played||b.played-a.played)),pairNote)
+  const pairNote=`${common} Allt að ${pairLimit} valkostir fyrir kosningu í salnum. Lágmark ${options.minimumPairSets} sameiginleg sett. Hlutfall = unnin / sameiginleg sett. Unnir leikir = sameiginlegir smáleikjasigrar. Leikir = allir sameiginlegir smáleikir, með jafnteflum; — ef eldri samantektargögn vantar leikjafjölda.`
+  const pairColumns=['Par','Unnin sett','Sett','Hlutfall','Unnir leikir','Leikir','Choke']
+  add('best','Besta pörunin',pairColumns,pairRows([...eligible].sort((a,b)=>b.wins/b.played-a.wins/a.played||b.played-a.played)),pairNote)
+  add('worst','Versta pörunin',pairColumns,pairRows([...eligible].sort((a,b)=>a.wins/a.played-b.wins/b.played||b.played-a.played)),pairNote)
   add('never','Aldrei saman',['Par'],[...pairs.values()].filter(p=>!p.played).map(p=>[p.ids.map(name).join(' + ')]),`${common} Leikmenn sem hafa mætt sem fastamenn á tímabilinu.`)
-  add('often','Oftast saman',['Par','Sigrar','Sett','Hlutfall','Mörk','Choke'],pairRows([...pairs.values()].filter(p=>p.played).sort((a,b)=>b.played-a.played)),`${common} Öll pör sem hafa spilað saman, raðað eftir sameiginlegum settum. Hlutfall = unnin / sameiginleg sett.`)
+  add('often','Oftast saman',pairColumns,pairRows([...pairs.values()].filter(p=>p.played).sort((a,b)=>b.played-a.played)),`${common} Ein síða, allt að 20 pör, raðað eftir sameiginlegum settum. Hlutfall = unnin / sameiginleg sett.`)
   const playerRows=(metric:'sessions'|'chokes'|'goals'|'nixDays',ascending=false)=>[...regular.players].sort((a,b)=>(ascending?1:-1)*(a[metric]-b[metric])).map(p=>[name(p.playerId),String(p[metric]),...(metric==='sessions'?[pct(p.sessions,sessions.length)]:[])])
-  add('attendance','Besta mæting',['Leikmaður','Kvöld','Mæting'],playerRows('sessions'),`${common} Mæting / öll kláruð kvöld; aðeins kvöld sem fastamaður telja í teljara.`)
-  add('attendance','Versta mæting',['Leikmaður','Kvöld','Mæting'],playerRows('sessions',true),common)
+  const attendanceRows=playerRows('sessions'),attendanceThreshold=Number(attendanceRows[Math.min(4,attendanceRows.length-1)]?.[1]??0)
+  add('attendance','Besta mæting',['Leikmaður','Kvöld','Mæting'],attendanceRows.filter(r=>Number(r[1])>=attendanceThreshold),`${common} Fimm bestu með öllum jöfnum; allir sem mættu alltaf koma fram. Mæting / öll kláruð kvöld; aðeins kvöld sem fastamaður telja í teljara.`)
+  const sweepRows=regular.players.filter(p=>p.sweeps>0).sort((a,b)=>b.sweeps-a.sweeps).map(p=>[name(p.playerId),String(p.sweeps),sessions.filter(s=>buildSeasonAnalytics({...source,sessions:[s]},season).players.find(r=>r.playerId===p.playerId)?.sweeps).map(s=>s.playedOn).join(', ')])
+  if(sweepRows.length)add('sweeps','Sópararnir',['Leikmaður','Sópanir','Kvöld'],sweepRows,`${common} Sópun: vinnur öll sett kvöldsins. Aðeins kvöld þar sem öll spiluð sett hafa sigurvegara; ólokin sett útiloka sópun.`)
+  const lowAttendance=playerRows('sessions',true).filter(r=>Number(r[1])/sessions.length<.5)
+  if(lowAttendance.length)add('attendance','Versta mæting',['Leikmaður','Kvöld','Mæting'],lowAttendance,`${common} Aðeins mæting undir 50%.`)
   awardStory('choke','Kafnarinn','chokes','choke',`${common} Choke: tapsett með einu stigi minna en þarf til sigurs.`)
   add('goals','Marka hrókarnir',['Leikmaður','Mörk'],playerRows('goals'),`${common} Sjálfsmörk telja ekki sem mörk skorarans.`)
   awardStory('nix','Nixarinn','nixDays','nix',`${common} Nix: mætt og spilað en ekkert sett unnið allt kvöldið. Stig í smáleikjum útiloka ekki nix.`)
-  const standings=[...regular.players].sort((a,b)=>b.setWins-a.setWins||name(a.playerId).localeCompare(name(b.playerId),'is'))
+  const finalTieOrder=options.finalTieOrder??[]
+  if(new Set(finalTieOrder).size!==finalTieOrder.length)throw new Error('Sami leikmaður má ekki vera í fleiri en einu úrslitasæti.')
+  const finalIndex=(id:string)=>finalTieOrder.includes(id)?finalTieOrder.indexOf(id):Number.MAX_SAFE_INTEGER
+  const standings=[...regular.players].sort((a,b)=>compareCompetitionPlayers(a,b)||finalIndex(a.playerId)-finalIndex(b.playerId)||name(a.playerId).localeCompare(name(b.playerId),'is'))
+  const pendingTieGroups:NonNullable<Presentation['pendingTieGroups']>=[]
+  for(let i=0;i<Math.min(3,standings.length);){
+    const tied=standings.filter(p=>compareCompetitionPlayers(p,standings[i])===0)
+    const needed=Math.min(3-i,tied.length)
+    if(tied.length>1&&tied.filter(p=>finalTieOrder.includes(p.playerId)).length<needed)pendingTieGroups.push({playerIds:tied.map(p=>p.playerId),places:Array.from({length:needed},(_,j)=>i+j+1)})
+    i+=tied.length
+  }
   const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>[name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),String(p.points),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)])
   const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Stig','Choke','Nix','Mæting']
-  const rankingNote=`${common} ABS = unnin sett / ${totalSets} sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Stig = stig úr smáleikjum, sama mæling og Stig í tölfræðitöflunni. Röðun eftir ABS; jafntefli deila sæti.`
+  const rankingNote=`${periodNote} Aðeins framlag sem fastamaður. Röðun: ABS → mæting → stig úr smáleikjum. ABS = unnin sett / ${totalSets} sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Stig reiknast í hverju setti sem heill hluti smáleikjasigra / sigrar fyrir stig (venjulega 1); ekki persónuleg mörk. Enn jöfn verðlaunasæti ráðast af sérstaklega staðfestri úrslitaröð eftir kosningu.`
   add('subs','Varamenn',columns,tableRows([...subs.players].sort((a,b)=>b.setWins-a.setWins)),'Aðeins framlag á kvöldum sem varamaður. ABS og mæting nota öll kvöld/sett tímabilsins.')
   if(options.sections.includes('podium'))for(const rank of [3,2,1]){
-    const values = [...new Set(standings.map(p=>p.setWins))]
-    const winners=standings.filter(p=>p.setWins===values[rank-1])
+    const winners=standings[rank-1]?[standings[rank-1]]:[]
     if(!winners.length)continue
+    if(pendingTieGroups.some(g=>g.places.includes(rank))){slides.push({title:`${rank}. sæti — bíður úrslita`,columns:[],rows:[],note:rankingNote,story:{kind:'podium',phase:'score',rank,caption:'Enn jafnt í ABS, mætingu og stigum. Veljið úrslitaröð eftir kosningu áður en gefið er út.',value:'?'}});continue}
     const title=`${rank}. sæti`, score=pct(winners[0].setWins,totalSets)
-    slides.push({title,columns:['Leikmaður','ABS','Unnin sett'],rows:winners.map(p=>[name(p.playerId),pct(p.setWins,totalSets),String(p.setWins)]),note:`${rankingNote} Verðlaun: þrjú efstu ólíku ABS-hlutföllin; jafnir fá sömu verðlaun.`,story:{kind:'podium',phase:'reveal',rank,value:score,caption:rank===1?(winners.length>1?'Toppnum er deilt. Dýrðin líka.':'Toppurinn er þinn. Njóttu augnabliksins.'):winners.length>1?'Sætið er sameiginlegt. Fagnaðarlætin líka.':'Stígðu fram. Þetta er þitt augnablik.',finale:rank===1}})
+    slides.push({title,columns:['Leikmaður','ABS','Unnin sett'],rows:winners.map(p=>[name(p.playerId),pct(p.setWins,totalSets),String(p.setWins)]),note:rankingNote,story:{kind:'podium',phase:'reveal',rank,value:score,caption:rank===1?'Toppurinn er þinn. Njóttu augnabliksins.':'Stígðu fram. Þetta er þitt augnablik.',finale:rank===1}})
   }
   add('table','Staðan',[...columns.slice(0,5),'Assist','G+A',...columns.slice(5)],tableRows(standings,true),rankingNote,regular.assistsIncomplete?'Stoðsendingar vantar í hluta gagnanna. Assist og G+A sýna aðeins skráð framlag.':undefined)
   add('extra','Stoðsendingar og kvöldmet',['Leikmaður','Stoðs.','G+A','Flest stig á kvöldi'],[...regular.players].sort((a,b)=>b.contributions-a.contributions).map(p=>[name(p.playerId),String(p.assists),String(p.contributions),String(p.bestNightPoints)]),regular.assistsIncomplete?'Stoðsendingar vantar í hluta gagnanna. G+A sýnir aðeins skráð framlag.':common)
@@ -147,10 +168,11 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
     if(slides.length===1)slides.push({title:'Takk fyrir kvöldið',columns:[],rows:[]})
     slides.splice(slides.length-1,0,{title:'Sturlaðar staðreyndir',layout:'fun-facts',columns:['Staðreynd','Tala','Sagan'],rows:facts.slice(0,4),note:'Reiknað úr sama frysta gagnasafni og kynningin. Aðeins framlag sem fastamaður; pör telja sameiginleg sett. Þetta eru lýsingar á skráðum gögnum, ekki spár.'})
   }
-  return {id:crypto.randomUUID(),schemaVersion:1,title:options.title.trim(),seasonId:season.id,kind:options.kind,eventDate:options.eventDate,startsOn,cutoff:options.cutoff,publishedAt:new Date().toISOString(),slides,source}
+  return {id:crypto.randomUUID(),schemaVersion:1,title:options.title.trim(),seasonId:season.id,kind:options.kind,eventDate:options.eventDate,startsOn,cutoff:options.cutoff,publishedAt:new Date().toISOString(),slides,source,...(options.sections.includes('podium')&&pendingTieGroups.length?{pendingTieGroups}:{})}
 }
 
 export async function publishPresentation(p:Presentation) {
+  if(p.pendingTieGroups?.length)throw new Error('Veldu úrslitaröð jafnra verðlaunasæta og endurgerðu forskoðun áður en gefið er út.')
   if(!supabase)throw new Error('Tengja þarf Supabase og keyra migration 018 fyrir vefútgáfu. Forskoðun og HTML niðurhal virka án nets.')
   const {error}=await supabase.rpc('publish_presentation',{document:p})
   if(error)throw new Error('Útgáfa mistókst. Athugaðu nettengingu, stjórnandaaðgang og migration 018.')

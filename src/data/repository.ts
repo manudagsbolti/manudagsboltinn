@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { randomCaptain } from '../domain/captains'
+import { chooseRegularCaptain } from '../domain/captains'
 import { defaultSeasonForDate, validateSeason } from '../domain/seasons'
 import { validateGoal, validateTeams } from '../domain/validation'
 import { db } from '../db/localDb'
@@ -147,7 +147,9 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder
   const session = await db.sessions.get(sessionId)
   if (!session) throw new Error('Leikdagur fannst ekki')
   if (session.status === 'completed') throw new Error('Kvöldinu er lokið.')
-  validateTeams(teamDrafts, (await db.sessionPlayers.where('sessionId').equals(sessionId).toArray()).map(p => p.playerId))
+  const attendance=await db.sessionPlayers.where('sessionId').equals(sessionId).toArray()
+  validateTeams(teamDrafts, attendance.map(p => p.playerId))
+  const regularIds=attendance.filter(p=>p.roleAtSession==='REGULAR').map(p=>p.playerId)
   const existing = await db.sets.where('sessionId').equals(sessionId).sortBy('setNo')
   if (existing.some(s => s.status !== 'completed')) throw new Error('Klára þarf núverandi sett fyrst.')
   const previousSet = existing.at(-1)
@@ -162,8 +164,9 @@ async function _createSet(sessionId: UUID, teamDrafts: TeamDraft[], openingOrder
     const previousTeam = previousTeams[index]
     const sameMembers = previousTeam && draft.playerIds.length === previousMembers.filter(member => member.teamId === previousTeam.id).length
       && draft.playerIds.every(playerId => previousMembers.some(member => member.teamId === previousTeam.id && member.playerId === playerId))
-    const captainPlayerId = (sameMembers && previousTeam.captainPlayerId) || draft.captainPlayerId || randomCaptain(draft.playerIds)
-    if (!draft.playerIds.includes(captainPlayerId)) throw new Error('Fyrirliði þarf að vera í liðinu.')
+    if(draft.captainPlayerId&&(!draft.playerIds.includes(draft.captainPlayerId)||!regularIds.includes(draft.captainPlayerId)))throw new Error('Fyrirliði þarf að vera fastamaður í liðinu.')
+    const keptCaptain=sameMembers&&previousTeam.captainPlayerId&&regularIds.includes(previousTeam.captainPlayerId)?previousTeam.captainPlayerId:undefined
+    const captainPlayerId = draft.captainPlayerId || keptCaptain || chooseRegularCaptain(draft.playerIds,regularIds)
     return { id: id(), setId: set.id, name: draft.name, color: draft.color, sortOrder: index, captainPlayerId }
   })
   const members: SetTeamMember[] = teams.flatMap((team, index) => teamDrafts[index].playerIds.map((playerId) => ({ setId: set.id, teamId: team.id, playerId })))

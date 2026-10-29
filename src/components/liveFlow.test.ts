@@ -27,6 +27,7 @@ it.each([2, 3])('swaps colors without moving players or captains and saves the o
   const players = []
   for (const name of ['Anna', 'Ari', 'Bára', 'Bjarni', 'Cecilia', 'Carl'].slice(0, teamCount * 2)) players.push(await addPlayer(name))
   const session = await createSession({ playedOn: '2026-09-07', playerIds: players.map(p => p.id), ...DEFAULT_RULES })
+  await db.sessionPlayers.where('sessionId').equals(session.id).modify({roleAtSession:'REGULAR'})
   const onReady = vi.fn()
   await act(async () => root.render(createElement(TeamSetupScreen, { sessionId: session.id, onReady, onCancel: vi.fn() })))
   await waitFor(() => expect(button('SKIPTA Í LIÐ')).toBeDefined())
@@ -61,6 +62,7 @@ it('offers weighted drawing to recorders using cached season ratings offline', a
   const players = []
   for (const name of ['Anna','Ari','Bára','Bjarni']) players.push(await addPlayer(name))
   const session = await createSession({playedOn:'2026-09-07',playerIds:players.map(p=>p.id),...DEFAULT_RULES})
+  await db.sessionPlayers.where('sessionId').equals(session.id).modify({roleAtSession:'REGULAR'})
   const season = (await db.seasons.toArray())[0]
   await db.ratingCache.put({id:season.id,season,ratings:Object.fromEntries(players.map((p,i)=>[p.id,80+i*15])),fetchedAt:'2026-09-07T12:00:00Z'})
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
@@ -106,6 +108,8 @@ async function mount(teamCount = 2) {
   const players: Awaited<ReturnType<typeof addPlayer>>[] = []
   for (const name of names) players.push(await addPlayer(name))
   const session = await createSession({playedOn:'2026-09-07',playerIds:players.map(p => p.id),...DEFAULT_RULES})
+  await db.sessionPlayers.where('sessionId').equals(session.id).modify({roleAtSession:'REGULAR'})
+  await db.sessionPlayers.update([session.id,players.at(-1)!.id],{roleAtSession:'SUBSTITUTE'})
   await createSet(session.id, Array.from({length:teamCount}, (_, i) => ({name:['Rautt','Blátt','Gult'][i],color:'#fff',playerIds:players.slice(i*2,i*2+2).map(p=>p.id)})))
   const onFinish = vi.fn()
   await act(async () => root.render(createElement(LiveSessionScreen,{sessionId:session.id,onFinish,onBack:vi.fn(),onReshuffle:vi.fn()})))
@@ -114,6 +118,7 @@ async function mount(teamCount = 2) {
   const teams=await db.setTeams.toArray()
   for(const team of teams) {
     expect(await db.setTeamMembers.get([team.id,team.captainPlayerId!])).toBeDefined()
+    expect((await db.sessionPlayers.get([session.id,team.captainPlayerId!]))?.roleAtSession).toBe('REGULAR')
     expect(host.querySelector('.set-scoreboard')?.textContent).toContain(players.find(p=>p.id===team.captainPlayerId)?.name)
   }
   return {session,onFinish}

@@ -61,8 +61,8 @@ function AppContent({ access, signOut }: { access: AppAccess; signOut: () => voi
       {route.name === 'home' && (recorder ? <RecorderHome access={access} go={go} signOut={signOut}/> : <HomeScreen signOut={signOut} onNew={()=>go('new')} onManual={()=>go('manual')} onContinue={id=>go('live',id)} onSetup={id=>go('setup',id)} onSummary={id=>go('summary',id)}/>)}
       {route.name === 'players' && <PlayersScreen/>}
       {route.name === 'seasons' && <SeasonsScreen onOpen={s => go(s.status === 'completed' ? 'summary' : s.status === 'live' ? 'live' : 'setup', s.id)} />}
-      {route.name === 'stats' && <StatsScreen onPresent={year=>go('presentation',String(year))}/>}
-      {route.name === 'events' && <PresentationsScreen/>}
+      {route.name === 'stats' && <StatsScreen onPresent={year=>go('events',String(year))}/>}
+      {route.name === 'events' && <PresentationsScreen initialSeasonId={route.id}/>}
       {route.name === 'cloud' && <CloudScreen signOut={signOut}/>}
       {route.name === 'new' && <NewSessionScreen recorder={recorder} onCreated={id=>go('setup',id)} onCancel={()=>go('home')}/>}
       {route.name === 'manual' && <HistoricalSessionScreen onSaved={id=>go('summary',id)} onCancel={()=>go('home')}/>}

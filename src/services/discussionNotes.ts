@@ -6,15 +6,18 @@ import type { Presentation } from './presentations'
 export interface DiscussionEntry {
   id:string; presentationId:string; presentationTitle:string; seasonId:string; eventDate:string
   topic:string; outcome:string; createdAt:string
+  kind?:'topic'|'outcome'
 }
 export type LocalDiscussionEntry=DiscussionEntry & {syncState:'pending'|'synced'}
 
-export async function saveDiscussionEntry(p:Presentation,topic:string,outcome:string) {
+export async function saveDiscussionEntry(p:Presentation,topic:string,outcome:string,kind:'topic'|'outcome'='outcome') {
   if(!topic.trim()||!outcome.trim())throw new Error('Skráðu umræðuefni og niðurstöðu.')
-  const entry:LocalDiscussionEntry={id:crypto.randomUUID(),presentationId:p.id,presentationTitle:p.title,seasonId:p.seasonId,eventDate:p.eventDate,topic:topic.trim(),outcome:outcome.trim(),createdAt:new Date().toISOString(),syncState:'pending'}
+  const entry:LocalDiscussionEntry={id:crypto.randomUUID(),presentationId:p.id,presentationTitle:p.title,seasonId:p.seasonId,eventDate:p.eventDate,topic:topic.trim(),outcome:outcome.trim(),kind,createdAt:new Date().toISOString(),syncState:'pending'}
   await db.discussionNotes.add(entry)
   return entry
 }
+
+export const saveDiscussionTopic=(p:Presentation,topic:string)=>saveDiscussionEntry(p,topic,'Til umræðu.','topic')
 
 export async function syncDiscussionNotes() {
   if(!supabase)return

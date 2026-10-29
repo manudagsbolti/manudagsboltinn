@@ -140,6 +140,16 @@ Cloudflare secrets and does not deploy the app.
 
 ## Event publications
 
+October 29 review regression coverage: pairs show twenty voting options and
+known joint games; often-together is one page; all perfect-attendance ties are
+included and low attendance is strictly below 50%. Competition ranks use ABS,
+attendance, mini-game points and explicit final voting order if still tied;
+unresolved medals cannot be published. Sweeps exclude unfinished played sets.
+Draws count only on-court players, aggregate draw counts remain unknown.
+Only regulars can be newly selected captain; setup overrides old selection.
+Inline discussion topics survive closing the panel at the same slide and
+never mutate the published document.
+
 Nix is an attended/played night without any set win, even with positive
 mini-game points. Regression tests cover live and aggregate facts, one nix per
 night, exclusion of unplayed attendance, role separation and matching publication

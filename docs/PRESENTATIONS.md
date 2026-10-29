@@ -2,17 +2,43 @@
 
 Sami hluti appsins heldur utan um bæði miðannamöt og lokahóf. Stjórnandi velur önn, viðburðardag, lokadag gagna og efni. Samstilla fyrst til að hafa nýjustu samþykktu gögnin. Forskoðun les samræmt local gagnasafn og aðeins kláruð kvöld til og með lokadegi. Hún breytist ekki meðan hún er skoðuð.
 
+## Uppfærsla eftir kynningu 29. október 2026
+
+- Bestu/verstu pör: sjálfgefið 20 valkostir fyrir kosningu í salnum, ein þétt
+  tafla í hvorum flokki. Leikir og unnir leikir eru aðskildir frá settum.
+  — merkir óþekktan heildarleikjafjölda í samantektargögnum.
+- Oftast saman: ein síða, 20 algengustu pörin. Aldrei saman heldur öllum pörum.
+- Besta mæting heldur öllum jöfnum við fimmta sætið, þar með öllum með 100%.
+  Versta mæting birtist aðeins ef einhver er undir 50%.
+- Röðun: ABS → mæting → stig úr smáleikjum. Einn leikmaður í hverju
+  verðlaunasæti. Ef enn er jafnt kemur skýr biðglæra í forskoðun; veljið
+  úrslitaröð eftir kosningu í ritlinum og endurgerið forskoðun. Birting er
+  stöðvuð þar til verðlaunasætin hafa verið leyst.
+- Sópararnir: sérstök heiðursglæra með fjölda og dagsetningum kvölda þar sem
+  öll sett unnust. Ólokið/óunnið spilað sett útilokar sópun.
+- Jafntefli og skráð fyrirliðasett sjást í tölfræðitöflunni. + við jafntefli er
+  aðeins þekktur lágmarksfjöldi ef hluta eldri gagna vantar.
+- Í stjórnandakynningu opnar Pallborð hliðarspjald. Vista má ný umræðuefni
+  án niðurstöðu eða bæta við niðurstöðu á staðnum. Lokun fer á sömu glæru.
+  Ný umræðuefni sjást á pallborðsglærunni í stjórnandasýn og geymast í sér
+  safni; frysta opinbera skjalið og gamlar HTML-skrár haldast óbreytt.
+- Nýtt fyrirliðaval gildir við vistun, aðeins fastamenn eru gjaldgengir, og
+  nýr dráttur reynir annan fyrirliða ef hægt er. Sama lið sem heldur áfram
+  sjálfkrafa heldur gildum fyrirliða. Val og settanúmer varðveitast.
+
+Þessar reglur taka við af eldri lýsingum hér að neðan fyrir nýjar útgáfur.
+
 ## Uppbygging samkvæmt fyrri kynningum
 
 Fyrirmyndir lesnar á Drive: Mánudagsboltinn-2025-02-mid.pptx (haust 2025) og Mánudagsboltinn-2026-01-Final.pptx (vor 2026). Þar eru jafnir leikmenn saman með tölu sinni, ekki inngangur, talnaglæra og sér glæra fyrir hvern leikmann. Vor 2026 sýnir t.d. choke-hópa með 9, 10 og 11 og nix-hópa með 3 og 4.
 
 - Ein forsíða og ein staðreyndaglæra.
-- Besta/versta pörun, mæting og markaskorarar halda topp 5.
+- Besta/versta pörun sýnir allt að 20 valkosti; markaskorarar halda topp 5 og besta mæting tekur alla jafna við fimmta sætið.
 - Aldrei saman: allir, allt að 32 pör á glæru í tveimur dálkum.
-- Oftast saman: allir, allt að 20 pör á þéttri töfluglæru.
+- Oftast saman: ein þétt tafla með 20 algengustu pörunum.
 - Kafnarinn: allt að þrjár niðurstöðuglærur, þrjú hæstu jákvæðu gildin í hækkandi röð. Allir jafnir saman á sömu glæru.
 - Nixarinn: allt að tvær niðurstöðuglærur, tvö hæstu jákvæðu gildin í hækkandi röð. Allir jafnir saman á sömu glæru.
-- Verðlaun: ein glæra á sæti, 3., 2., 1. Öll nöfn sem deila verðlaunum sjást saman. Engar aukainngangs- eða talnaglærur.
+- Verðlaun: ein glæra og einn leikmaður á sæti, 3., 2., 1. Enn jöfn sæti þurfa sérstaklega valda úrslitaröð.
 - Staðan: ALLIR fastamenn á EINNI glæru, með þéttara töflusniði sem lagast að fjölda raða og skjáhæð.
 - Varamenn sér. Pallborðsumræða er frjáls texti.
 
@@ -43,7 +69,7 @@ smáleikjasigra/leiki, mörk, assist, G+A, sjálfsmörk, choke, nix, 0-sett,
 kvöld, mætingu og rating. Smellur á leikmann sýnir kvöldin að baki tölunum
 með tengli á hvert kvöld. Óþekktur smáleikjafjöldi í aggregate gögnum er strik.
 
-ABS = unnin sett / öll spiluð sett annarinnar. ADJ = unnin sett / spiluð sett viðkomandi. Aðalkeppni telur aðeins hlutverk REGULAR á hverju kvöldi; varamenn eru sér. Verðlaunahópar nota þrjú efstu ólíku ABS-gildin, með öllum jöfnum saman. Heildartaflan heldur sömu ABS-röðun og tölum.
+ABS = unnin sett / öll spiluð sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Aðalkeppni telur aðeins hlutverk REGULAR á hverju kvöldi; varamenn eru sér. Mæting og síðan stig úr smáleikjum skera úr jöfnu ABS. Verðlaun eru þrjú efstu sætin, einn í hverju sæti. Heildartaflan heldur sömu röðun og tölum.
 
 Listar ná yfir leikmenn með skráða mætingu í viðkomandi hlutverki. Óbyrjuð undirbúningssett telja ekki. Pörun telur sameiginleg sett, settsigra, smáleikjasigra/eldri liðsmörk og choke. Báðir þurfa að vera fastamenn á kvöldinu. Eldri aggregate gögn eru lesin án tilbúinna atvika. Ófullkomin stoðsendingaþekja er merkt.
 

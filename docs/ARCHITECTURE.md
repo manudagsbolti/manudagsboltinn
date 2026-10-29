@@ -4,9 +4,11 @@ SetTeam.captainPlayerId is an optional persisted team-member ID (migration 017).
 A deferred composite FK ensures membership while allowing the existing ordered
 team-then-membership inserts within atomic sync/submission transactions. Legacy
 teams keep null. No Dexie index change is required; existing sync/backup flows
-include the field. Captains are sampled uniformly once during set creation or
-confirmed from the setup preview, independently of the weighted team algorithm.
-New sets reuse the previous captain for a team with identical membership.
+include the field. Only role-at-session regulars are eligible. A new draw avoids
+the preceding captain when another eligible regular exists. Explicit setup
+selection wins over reuse; unchanged teams continuing automatically keep an
+eligible captain. All-substitute teams remain unassigned without blocking play.
+Analytics counts recorded captain sets; historical facts are not fabricated.
 
 Optional assists: session.assistsEnabled controls future recording only;
 goal.assistsRecorded snapshots coverage and remains false when a later toggle

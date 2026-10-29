@@ -93,8 +93,13 @@ The operator can then add one or more substitutes by searching existing players.
 
 ### 4.2 Team count and sizes
 
-Captains (updated September 2026): randomly choose one member of each team
-when teams are first drawn, independently of player rating or role. Show a C badge before
+Captains (updated October 29, 2026): choose only REGULAR players according to
+role_at_session; substitutes must never be newly assigned captain. Random draws
+avoid the preceding captain for the same team slot when another regular is
+available. Operators may explicitly choose a regular captain during setup; that
+choice takes precedence over the previous captain even with unchanged members.
+An all-substitute team remains without a captain and can still play offline.
+Show a C badge before
 the name in team selection and rosters, and show the current captain's name on
 the live scoreboard for all teams including the waiting team. Persist the choice
 with the set team; rendering/reloading must not redraw it. Setup roster changes
@@ -383,6 +388,20 @@ At the end of the night show per player at least:
 Derived win percentage may also be shown.
 
 ## 11. Season statistics
+
+Competition ordering confirmed October 29, 2026: ABS (set wins / all played
+sets in the selected period), then attended nights as REGULAR, then mini-game
+points. Podium places are exclusive: one player each for third, second, first.
+If all three criteria are still equal, the operator must select the final order
+after a vote before publishing; do not silently decide by name or share medals.
+Best-attendance slides retain everyone tied at the top-five boundary. Worst
+attendance includes only attendance strictly below 50%. Pair vote slides show
+up to 20 candidates each and distinguish set counts from mini-game counts;
+unknown aggregate game counts remain unknown. Often-together is one page.
+
+A sweep is a played, completed night on which a player wins every played set.
+An unfinished/unawarded played set prevents a sweep; an unstarted prepared set
+does not. Store no aggregate as primary truth. Respect role-at-session filters.
 
 ### 11.1 Main regular-player competition
 

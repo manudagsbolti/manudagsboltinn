@@ -80,5 +80,7 @@ export const deckStyles = `
 .event-presentation .deck-ranking li:first-child{background:#24331b;color:#ffffff;border-color:#dcff72}
 .event-presentation .deck-ranking .deck-value,.event-presentation .deck-ranking .deck-details b{color:#ffffff!important}
 .event-presentation .deck-ranking .deck-details{color:#e8eee4;opacity:1}
+.event-presentation select,.event-presentation select option{color-scheme:dark;background:#101617!important;color:#ffffff!important}
+.deck-discussion-panel{position:fixed;z-index:10;right:0;top:0;bottom:0;width:min(560px,100%);box-sizing:border-box;overflow:auto;padding:24px;background:#101617;color:#fff;box-shadow:-20px 0 60px #000a}.deck-discussion-panel .discussion-notebook{margin:16px 0}.deck-discussion-panel .card{background:#1d2424;border:1px solid #ffffff30;padding:18px;margin:16px 0}.deck-discussion-panel input,.deck-discussion-panel textarea{background:#0d1112;color:#fff;border:1px solid #ffffff60;padding:12px;box-sizing:border-box;width:100%}.deck-discussion-panel label{display:block;margin:12px 0}.deck-discussion-panel .event-actions{display:flex;gap:10px;flex-wrap:wrap}
 @media print{.deck-toolbar,.deck-controls,.deck-method{display:none!important}.deck-scene{min-height:95vh;break-after:page;print-color-adjust:exact}.deck-copy{animation:none}.deck-page{display:block!important}}
 `
