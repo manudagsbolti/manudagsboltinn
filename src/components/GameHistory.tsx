@@ -46,7 +46,15 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
     try { await action() } catch (e) { setError(e instanceof Error ? e.message : 'Aðgerð mistókst.') }
     finally { lock.current = false; setBusy(false) }
   }
-  function choose(s: GameHistorySnapshot, game?: Game) {
+  async function choose(s: GameHistorySnapshot, game?: Game) {
+    // The reactive list may still show its pre-pause snapshot. Open the editor
+    // from one fresh local read so saving does not reject our own pause as stale.
+    const fresh = await db.transaction('r', [db.sets, db.games, db.goals, db.timerEvents], () => readGameHistory(s.set.id))
+    const gameId = game?.id
+    const selected = gameId ? fresh.games.find(g => g.id === gameId) : undefined
+    if (gameId && selected?.status !== 'completed') throw new Error('Leikjaskráin hefur breyst. Opnaðu leikinn aftur.')
+    s = fresh
+    game = selected
     const teams = data!.teams.filter(t=>t.setId===s.set.id).sort((a,b)=>a.sortOrder-b.sortOrder)
     const goal = s.goals.find(g=>g.gameId===game?.id && !g.deletedAt)
     setSnapshot(structuredClone(s)); setReason(''); setConfirm(false); setDeleting(false); setError('')
@@ -124,9 +132,9 @@ export function GameHistory({ sessionId }: { sessionId: string }) {
           <div className="history-actions"><button disabled={busy} onClick={()=>liveEditing ? reset() : setConfirm(false)}>{liveEditing ? 'Hætta við' : 'Til baka'}</button><button className="primary" disabled={busy || (!deleting && !valid)} onClick={()=>void run(async()=>{await saveGameEdit(sessionId,snapshot,deleting?{deleteGameId:edit.gameId!}:edit,reason.trim() || 'Leiðrétting í leik');reset()})}>{busy?'Vista…':liveEditing?'Vista breytingu':'Staðfesta breytingu'}</button></div>
         </div>}
       </div> : <>
-        {data.snapshots.map(s=><section className="history-set" key={s.set.id}><div className="history-set-heading"><h3>Sett {s.set.setNo} · {s.set.winningTeamId?`${teamName(s.set.winningTeamId)} vann`:'Enginn settsigur'}</h3>{!data.frozen && <button disabled={busy} onClick={()=>choose(s)}>＋ Bæta inn leik</button>}</div>
+        {data.snapshots.map(s=><section className="history-set" key={s.set.id}><div className="history-set-heading"><h3>Sett {s.set.setNo} · {s.set.winningTeamId?`${teamName(s.set.winningTeamId)} vann`:'Enginn settsigur'}</h3>{!data.frozen && <button disabled={busy} onClick={()=>void run(()=>choose(s))}>＋ Bæta inn leik</button>}</div>
           {gamesAfterTarget(s.games,session)>0 && <p className="warning-banner">Leikir eru skráðir eftir að sigurmarki setts var náð. Yfirfarðu skráninguna; síðari leikir hafa ekki verið færðir.</p>}
-          {s.games.filter(g=>g.status==='completed').map(g=><article className="history-game" key={g.id}><div><small>LEIKUR {g.gameNo}</small><strong>{teamName(g.holderTeamId)} – {teamName(g.challengerTeamId)}</strong><span>{historyResult(g,s.goals,teamName,playerName)}</span></div>{!data.frozen && <button disabled={busy} aria-label={`Breyta leik ${g.gameNo} í setti ${s.set.setNo}`} onClick={()=>choose(s,g)}>Breyta</button>}</article>)}
+          {s.games.filter(g=>g.status==='completed').map(g=><article className="history-game" key={g.id}><div><small>LEIKUR {g.gameNo}</small><strong>{teamName(g.holderTeamId)} – {teamName(g.challengerTeamId)}</strong><span>{historyResult(g,s.goals,teamName,playerName)}</span></div>{!data.frozen && <button disabled={busy} aria-label={`Breyta leik ${g.gameNo} í setti ${s.set.setNo}`} onClick={()=>void run(()=>choose(s,g))}>Breyta</button>}</article>)}
           {!s.games.some(g=>g.status==='completed') && <p>Engir loknir leikir í þessu setti.</p>}
         </section>)}
         {!!session.gameCorrections?.length && <details className="history-audit"><summary>Breytingasaga ({session.gameCorrections.length})</summary>{[...session.gameCorrections].reverse().map((c,i)=><article key={c.id}><strong>{c.description}</strong><p>{c.reason} · {new Date(c.createdAt).toLocaleString('is-IS')}</p>{i===0 && !data.frozen && <button disabled={busy} onClick={()=>{if(window.confirm('Afturkalla nýjustu leiðréttinguna? Aðgerðin stöðvast ef ný skráning hefur breytt settinu.')) void run(()=>reverseGameCorrection(sessionId,c.id))}}>Afturkalla leiðréttingu</button>}</article>)}</details>}
