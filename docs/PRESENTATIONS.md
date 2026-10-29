@@ -31,6 +31,18 @@ til að nota breytt tímabil.
 
 ## Tölfræði
 
+Nix (staðfest 29. október 2026): eitt mætt og spilað kvöld án unnins setts,
+jafnvel þótt leikmaður fái stig úr smáleikjum. Telst einu sinni á kvöld, ekki
+einu sinni í setti. Fjarvera og óspiluð kvöld telja ekki. Sama reikniregla er í
+tölfræðitöflu, kvöldasundurliðun og nýjum kynningum. Eldri útgefnar kynningar
+eru frystar og þarf að gefa út nýja útgáfu til að nota leiðrétta skilgreiningu.
+
+Tölfræðiyfirlitið sýnir alla leikmenn í einni töflu með ABS-röðun sjálfgefið.
+Dálkar eru raðanlegir og innihalda unnin/spiluð sett, ABS, ADJ, stig,
+smáleikjasigra/leiki, mörk, assist, G+A, sjálfsmörk, choke, nix, 0-sett,
+kvöld, mætingu og rating. Smellur á leikmann sýnir kvöldin að baki tölunum
+með tengli á hvert kvöld. Óþekktur smáleikjafjöldi í aggregate gögnum er strik.
+
 ABS = unnin sett / öll spiluð sett annarinnar. ADJ = unnin sett / spiluð sett viðkomandi. Aðalkeppni telur aðeins hlutverk REGULAR á hverju kvöldi; varamenn eru sér. Verðlaunahópar nota þrjú efstu ólíku ABS-gildin, með öllum jöfnum saman. Heildartaflan heldur sömu ABS-röðun og tölum.
 
 Listar ná yfir leikmenn með skráða mætingu í viðkomandi hlutverki. Óbyrjuð undirbúningssett telja ekki. Pörun telur sameiginleg sett, settsigra, smáleikjasigra/eldri liðsmörk og choke. Báðir þurfa að vera fastamenn á kvöldinu. Eldri aggregate gögn eru lesin án tilbúinna atvika. Ófullkomin stoðsendingaþekja er merkt.

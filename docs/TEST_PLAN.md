@@ -140,6 +140,12 @@ Cloudflare secrets and does not deploy the app.
 
 ## Event publications
 
+Nix is an attended/played night without any set win, even with positive
+mini-game points. Regression tests cover live and aggregate facts, one nix per
+night, exclusion of unplayed attendance, role separation and matching publication
+totals. The statistics UI test covers basic columns, default ABS order, sorting
+by nix and opening the supporting night with its summary link.
+
 Automated publication tests cover cutoff snapshots, ABS denominator, shared ranks, role separation, aggregate pair samples, immutability, retry and database permissions. Manually: create a preview offline, navigate with arrows/dropdown, download/open HTML, publish online, open public link in a signed-out browser, edit later game facts and verify the published deck stays unchanged. Check projector and narrow phone layouts.
 
 ## Discussion outcomes and fun facts

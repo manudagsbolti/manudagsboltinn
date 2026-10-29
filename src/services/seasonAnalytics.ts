@@ -8,6 +8,8 @@ export interface SeasonPlayerAnalytics {
   setsPlayed: number
   setWins: number
   smallWins: number
+  miniGames: number
+  ownGoals: number
   points: number
   goals: number
   assists: number
@@ -106,7 +108,7 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
     let row = aggregate.get(playerId)
     if (!row) {
       row = {
-        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, points: 0, goals: 0, assists: 0,
+        playerId, sessions: 0, setsPlayed: 0, setWins: 0, smallWins: 0, miniGames: 0, ownGoals: 0, points: 0, goals: 0, assists: 0,
         contributions: 0, chokes: 0, zeroPointSets: 0, nixDays: 0, pointsPerNight: 0, pointsPerSet: 0,
         contributionsPerNight: 0, setWinRate: 0, chokeRate: 0, bestNightPoints: 0, bestNightGoals: 0,
         bestNightAssists: 0, scoringNights: 0, rating: 100,
@@ -136,6 +138,8 @@ export function buildSeasonAnalytics(data: AnalyticsData, selection: number | Se
       row.setsPlayed += night.setsPlayed
       row.setWins += night.setWins
       row.smallWins += night.smallWins
+      row.miniGames += night.miniGames
+      row.ownGoals += night.ownGoals
       row.points += night.points
       row.goals += night.goals
       row.assists += night.assists
@@ -252,7 +256,7 @@ function buildAwards(rows: SeasonPlayerAnalytics[]): SeasonAward[] {
   add('goalnight','💥','Markasprengjan',bigGoals,`${bigGoals?.bestNightGoals ?? 0} mörk`,'Flest mörk á einu kvöldi','good')
   add('choke','😵','Choke-meistarinn',choke && choke.chokes > 0 ? choke : undefined,`${choke?.chokes ?? 0} choke`,'3 stig í setti — en klárar það ekki','bad')
   add('zero','🥚','Núllkóngurinn',zero && zero.zeroPointSets > 0 ? zero : undefined,`${zero?.zeroPointSets ?? 0} 0-sett`,'Flest sett án stigs','bad')
-  add('nix','☠️','Nixarinn',nix && nix.nixDays > 0 ? nix : undefined,`${nix?.nixDays ?? 0} nix`,'Flest heil kvöld án stigs','bad')
+  add('nix','☠️','Nixarinn',nix && nix.nixDays > 0 ? nix : undefined,`${nix?.nixDays ?? 0} nix`,'Flest spiluð kvöld án unnins setts','bad')
   return awards
 }
 

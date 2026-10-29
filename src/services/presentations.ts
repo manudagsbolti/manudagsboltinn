@@ -111,7 +111,7 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
   add('attendance','Versta mæting',['Leikmaður','Kvöld','Mæting'],playerRows('sessions',true),common)
   awardStory('choke','Kafnarinn','chokes','choke',`${common} Choke: tapsett með einu stigi minna en þarf til sigurs.`)
   add('goals','Marka hrókarnir',['Leikmaður','Mörk'],playerRows('goals'),`${common} Sjálfsmörk telja ekki sem mörk skorarans.`)
-  awardStory('nix','Nixarinn','nixDays','nix',`${common} Nix: heilt kvöld án stigs.`)
+  awardStory('nix','Nixarinn','nixDays','nix',`${common} Nix: mætt og spilað en ekkert sett unnið allt kvöldið. Stig í smáleikjum útiloka ekki nix.`)
   const standings=[...regular.players].sort((a,b)=>b.setWins-a.setWins||name(a.playerId).localeCompare(name(b.playerId),'is'))
   const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>[name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),String(p.points),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)])
   const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Stig','Choke','Nix','Mæting']

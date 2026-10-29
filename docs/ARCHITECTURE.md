@@ -85,7 +85,7 @@ Raw facts eru geymd. Totals eru reiknuð:
 - attendance / appearances
 - pair performance
 - choke: taplið endar sett einu skrefi frá sigri (3 þegar winsRequired=4)
-- nix: taplið endar sett með 0 sigra
+- nix: leikmaður mætir og spilar en vinnur ekkert sett allt kvöldið; stig í smáleikjum útiloka ekki nix. Núll stig í setti er sér mæling (0-sett).
 
 ## Offline og sync
 

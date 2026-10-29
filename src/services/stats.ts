@@ -42,7 +42,7 @@ export function calculateSessionPlayerStats(input: {
     } else if (scorer) scorer.goals++
     if (goal.assistPlayerId && result.has(goal.assistPlayerId)) result.get(goal.assistPlayerId)!.assists++
   }
-  for (const stats of result.values()) stats.nixDay = input.sets.some((s) => s.status === 'completed') && stats.points === 0
+  for (const stats of result.values()) stats.nixDay = stats.setsPlayed > 0 && stats.setWins === 0
   return [...result.values()]
 }
 
@@ -67,7 +67,7 @@ export function calculateBackfillPlayerStats(backfill: SessionBackfill): PlayerS
     return {
       playerId, miniGames: 0, points: smallWins, smallWins, setsPlayed: completedRounds,
       goals: backfill.playerGoals.find(row => row.playerId === playerId)?.goals ?? 0,
-      assists: 0, ownGoals: 0, setWins, chokes, zeroPointSets, nixDay: smallWins === 0,
+      assists: 0, ownGoals: 0, setWins, chokes, zeroPointSets, nixDay: completedRounds > 0 && setWins === 0,
     }
   }))
 }

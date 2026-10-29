@@ -437,7 +437,10 @@ Current V1 definition: a team loses a set after having reached one win short of 
 
 ### 12.2 Nix
 
-Current V1 definition: a team finishes a lost set with 0 mini-game wins. Derived from set history.
+Confirmed October 29, 2026: Nix is one attended, played night with no set wins,
+even when the player earned mini-game points. Count once per player per night,
+using their actual set-team memberships. Absence and empty/unplayed nights do
+not count. A zero-point set is a separate statistic. Derive from raw facts.
 
 ## 13. Offline-first requirement
 

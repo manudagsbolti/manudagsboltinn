@@ -14,6 +14,20 @@ function fixture():AnalyticsData {
 }
 const options={title:'Miðannamat',kind:'midterm' as const,eventDate:'2026-10-29',cutoff:'2026-10-28',sections:sections.map(([key])=>key),minimumPairSets:1,discussion:'Mæting'}
 describe('event publications',()=>{
+  it('shows the same nonzero nix total in analytics, standings and award reveals',()=>{
+    const data=fixture()
+    data.backfills![0].rounds=[{roundNo:1,teamGoals:{A:4,B:3}},{roundNo:2,teamGoals:{A:4,B:2}}]
+    data.attendance.find(a=>a.playerId==='c')!.roleAtSession='REGULAR'
+    const p=buildPresentation(data,season,options)
+    const a=buildSeasonAnalytics(data,season,'REGULAR',{startsOn:season.startsOn,endsOn:options.cutoff})
+    expect(a.players.find(r=>r.playerId==='c')).toMatchObject({points:5,setWins:0,nixDays:1})
+    const table=p.slides.find(s=>s.title==='Staðan')!
+    expect(table.rows.find(r=>r[0]==='c')![table.columns.indexOf('Nix')]).toBe('1')
+    expect(p.slides.find(s=>s.story?.kind==='nix')?.rows).toEqual([['c','1']])
+    data.attendance.find(a=>a.playerId==='c')!.roleAtSession='SUBSTITUTE'
+    expect(buildPresentation(data,season,options).slides.find(s=>s.title==='Staðan')?.rows.some(r=>r[0]==='c')).toBe(false)
+    expect(buildSeasonAnalytics(data,season,'SUBSTITUTE').players.find(r=>r.playerId==='c')?.nixDays).toBe(1)
+  })
   it('uses inclusive selected dates and the same points and ABS denominator as statistics',()=>{
     const data=fixture()
     data.sessions.push(session('earlier','2026-09-07'))
