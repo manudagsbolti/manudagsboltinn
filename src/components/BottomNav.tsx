@@ -1,4 +1,4 @@
-export type MainRoute = 'home' | 'players' | 'seasons' | 'stats' | 'cloud'
+export type MainRoute = 'home' | 'players' | 'seasons' | 'stats' | 'cloud' | 'events'
 
 export function BottomNav({ current, navigate }: { current: MainRoute; navigate: (route: MainRoute) => void }) {
   const items: { route: MainRoute; icon: string; label: string }[] = [
@@ -6,6 +6,7 @@ export function BottomNav({ current, navigate }: { current: MainRoute; navigate:
     { route: 'players', icon: '♟', label: 'Leikmenn' },
     { route: 'seasons', icon: '▦', label: 'Annir og kvöld' },
     { route: 'stats', icon: '▥', label: 'Tölfræði' },
+    { route: 'events', icon: '▻', label: 'Kynningar' },
     { route: 'cloud', icon: '☁', label: 'Sync' },
   ]
   return <nav className="bottom-nav" aria-label="Aðalleiðsögn">{items.map((item) => (

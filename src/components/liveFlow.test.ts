@@ -134,6 +134,7 @@ it('opens history in a pause and keeps the same two-team matchup after a result 
   expect((await db.games.toArray()).some(g=>g.status==='live')).toBe(false)
   const later=(await db.games.toArray()).find(g=>g.status==='paused')!
   await act(async()=>{host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click()})
+  await waitFor(()=>expect(host.querySelector('.history-editor')).not.toBeNull())
   await act(async()=>{
     const select=[...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s=>s.parentElement?.textContent?.startsWith('Úrslit'))!
     select.value='timeout'; select.dispatchEvent(new Event('change',{bubbles:true}))
@@ -169,6 +170,7 @@ it('corrects the last winner through history and shows the repaired three-team l
   const teams=await db.setTeams.where('setId').equals(paused.setId).sortBy('sortOrder')
   const scorer=(await db.players.toArray()).find(p=>p.name==='Bára')!
   await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click())
+  await waitFor(()=>expect(host.querySelector('.history-editor')).not.toBeNull())
   const select = async(label:string,value:string)=>act(async()=>{
     const node=[...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s=>s.parentElement?.textContent?.startsWith(label))!
     node.value=value; node.dispatchEvent(new Event('change',{bubbles:true}))
@@ -343,6 +345,7 @@ it('corrects the last result with one save, then selects the actual next matchup
   await click('Leikir og leiðréttingar')
   await waitFor(() => expect(host.querySelector('.game-history-overlay')).not.toBeNull())
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Breyta leik 1 í setti 1"]')!.click())
+  await waitFor(() => expect(host.querySelector('.history-editor')).not.toBeNull())
   await act(async () => {
     const select = [...host.querySelectorAll<HTMLSelectElement>('.history-editor select')].find(s => s.parentElement?.textContent?.startsWith('Úrslit'))!
     select.value = 'timeout'; select.dispatchEvent(new Event('change', { bubbles: true }))

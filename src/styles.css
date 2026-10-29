@@ -261,3 +261,27 @@ h1,h2,h3{color:var(--text)}
 .live-edit-fields label { display:flex; flex-direction:column; gap:6px; flex:1 1 150px; }
 .live-edit-fields input,.live-edit-fields select,.live-edit-fields button { min-height:44px; }
 .live-edit-fields p { flex-basis:100%; }
+/* Published event decks use their own responsive, high contrast canvas. */
+.event-editor .card{padding:24px;margin:20px 0}
+.event-form{display:grid;gap:18px}
+.event-form label{display:grid;gap:8px}
+.event-form input,.event-form select,.event-form textarea{padding:12px;font:inherit;max-width:100%;min-width:0}
+.event-form fieldset{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.event-form .event-check{display:flex;align-items:center;gap:12px}
+.event-check input{width:22px;height:22px}
+.event-actions{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.event-presentation{position:fixed;inset:0;z-index:100;overflow:auto;background:#090c0f;color:#f6f6ee;min-height:100dvh;padding:24px;display:flex;flex-direction:column;gap:24px}
+.event-presentation header,.event-presentation footer{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.event-presentation main{flex:1;padding:3vw}
+.event-presentation h1{font-size:clamp(32px,5vw,72px);color:#d9ff70;margin:20px 0}
+.event-presentation table{width:100%;border-collapse:collapse;font-size:clamp(16px,1.7vw,28px)}
+.event-presentation td,.event-presentation th{text-align:left;padding:12px;border-bottom:1px solid #3c454a}
+.event-presentation p{color:#bbc4ca;max-width:1100px}
+.event-presentation button,.event-presentation select{background:#202a30;color:#fff;border:1px solid #6b7c83;padding:12px;font:inherit;border-radius:8px}
+.event-presentation button:disabled{opacity:.4}
+.event-table{overflow-x:auto}
+.event-presentation footer select{max-width:50vw}
+@media(max-width:600px){.event-presentation{padding:12px}.event-presentation main{padding:0}.event-presentation td,.event-presentation th{padding:10px 6px}.event-presentation header span{width:100%}}
+
+.bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr))}
+.discussion-notebook{margin:28px 0}.discussion-notebook .card{padding:20px;margin:16px 0}.discussion-outcome{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}.discussion-notebook textarea{min-height:140px}

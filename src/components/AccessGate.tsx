@@ -40,7 +40,6 @@ export function AccessGate({ children }: { children: (access: AppAccess, signOut
     try { await signOutSafely(); setAccess(null); setError('') }
     catch (e) { setError(e instanceof Error ? e.message : 'Útskráning mistókst.') }
   }
-  if (!supabase && import.meta.env.DEV) return children({ role: 'admin', userId: 'local-development' }, () => undefined)
   if (loading) return <main className="screen loading-screen">Opna Mánudagsboltann…</main>
   if (access) return <>{error && <p role="alert" className="warning-banner">{error}</p>}{children(access, () => { void logout() })}</>
   return <main className="screen page-screen access-screen">

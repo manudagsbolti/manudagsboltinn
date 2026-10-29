@@ -122,3 +122,9 @@ leiðréttinga appsins, ekki óbreytanleg öryggisúttekt á aðgerðum gagnagru
 V1 gerir ráð fyrir einum live recorder í einu. Multi-device collaborative live scoring er ekki hluti V1.
 
 Recorder ratings: migration 013 derives per-season/player points, sets, wins and contributions from approved completed raw nights, including aggregate backfills. The shared TypeScript rating formula computes the same ALL-role strength as admin. Dexie v7 ratingCache is disposable, excluded from raw sync/backup, cleared on account switches, and selected by night date. Invalid/failed downloads preserve the previous cache. No network request occurs in the draw/live loop.
+
+## Event publications
+
+See [Presentations](PRESENTATIONS.md). Immutable source snapshots and rendered slides live separately from operational sync in Supabase presentations and Dexie v8. Public RPC exposes slides only; publishing and archive reads require admin. The live loop never depends on publication services.
+
+Discussion outcomes use a separate append-only admin RPC and a durable local pending/synced state in Dexie v9. Automatic cloud retries run outside the live loop using the existing cloud lock. Pending outcomes prevent destructive access switches/logout and are included in backups. Published slides remain immutable; public slide reads cannot access discussion outcomes. Migration 019 adds explicit RPC grants and denies direct table access.

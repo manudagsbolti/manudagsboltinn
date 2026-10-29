@@ -1,11 +1,16 @@
 import { supabase } from '../lib/supabase'
 import { flushSyncQueue } from './syncQueue'
+import { cachedAccess } from './access'
+import { syncDiscussionNotes } from './discussionNotes'
 
 // Retry uploads on reconnect/sign-in and periodically after transient failures.
 // Downloads remain explicit, so another device never changes a live screen.
 export function startAutoSync(): () => void {
   if (!supabase) return () => undefined
-  const retry = () => { void flushSyncQueue().catch(() => undefined) }
+  const retry = () => {
+    void flushSyncQueue().catch(() => undefined)
+    if(cachedAccess()?.role==='admin')void syncDiscussionNotes().catch(()=>undefined)
+  }
   const visible = () => { if (document.visibilityState === 'visible') retry() }
   window.addEventListener('online', retry)
   document.addEventListener('visibilitychange', visible)

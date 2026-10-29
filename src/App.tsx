@@ -1,3 +1,4 @@
+import { PresentationsScreen, PublishedPresentation } from './components/PresentationsScreen'
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { BottomNav, type MainRoute } from './components/BottomNav'
 import { CloudScreen } from './components/CloudScreen'
@@ -18,16 +19,19 @@ import { SeasonsScreen } from './components/SeasonsScreen'
 import { allowedRoute, type AppAccess } from './services/access'
 import './styles.css'
 
-type Route = { name: MainRoute | 'new' | 'manual' | 'setup' | 'live' | 'summary' | 'presentation'; id?: string }
+type Route = { name: MainRoute | 'new' | 'manual' | 'setup' | 'live' | 'summary' | 'presentation' | 'published'; id?: string }
 
 function parseRoute(): Route {
   const hash = location.hash.replace(/^#\/?/, '')
   const [name, id] = hash.split('/')
-  if (['players','seasons','stats','cloud','new','manual','setup','live','summary','presentation'].includes(name)) return { name: name as Route['name'], id }
+  if (['players','seasons','stats','cloud','new','manual','setup','live','summary','presentation','events','published'].includes(name)) return { name: name as Route['name'], id }
   return { name: 'home' }
 }
 
 export default function App() {
+  const [publicRoute, setPublicRoute] = useState(parseRoute())
+  useEffect(() => { const change = () => setPublicRoute(parseRoute()); window.addEventListener('hashchange', change); return () => window.removeEventListener('hashchange', change) }, [])
+  if (publicRoute.name === 'published' && publicRoute.id) return <PublishedPresentation id={publicRoute.id}/>
   return <AccessGate>{(access, signOut) => <AppContent access={access} signOut={signOut} />}</AccessGate>
 }
 
@@ -58,6 +62,7 @@ function AppContent({ access, signOut }: { access: AppAccess; signOut: () => voi
       {route.name === 'players' && <PlayersScreen/>}
       {route.name === 'seasons' && <SeasonsScreen onOpen={s => go(s.status === 'completed' ? 'summary' : s.status === 'live' ? 'live' : 'setup', s.id)} />}
       {route.name === 'stats' && <StatsScreen onPresent={year=>go('presentation',String(year))}/>}
+      {route.name === 'events' && <PresentationsScreen/>}
       {route.name === 'cloud' && <CloudScreen signOut={signOut}/>}
       {route.name === 'new' && <NewSessionScreen recorder={recorder} onCreated={id=>go('setup',id)} onCancel={()=>go('home')}/>}
       {route.name === 'manual' && <HistoricalSessionScreen onSaved={id=>go('summary',id)} onCancel={()=>go('home')}/>}

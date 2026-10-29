@@ -59,3 +59,13 @@ it('routes a recorder away from a direct statistics URL without rendering statis
   expect(mock.stats).not.toHaveBeenCalled()
   expect(container.querySelector('nav[aria-label="Aðalleiðsögn"]')).toBeNull()
 })
+
+it('requires normal authentication even when an old local-preview URL is opened', async () => {
+  history.replaceState(null, '', '/?local-preview=1#/events')
+  try {
+    await act(async () => { root.render(createElement(App)); await new Promise(resolve => setTimeout(resolve, 20)) })
+    expect(container.querySelector('input[type=password]')).not.toBeNull()
+    expect(container.textContent).not.toContain('LOCAL PRÓFUN')
+    expect(container.querySelector('nav[aria-label="Aðalleiðsögn"]')).toBeNull()
+  } finally { history.replaceState(null, '', '/') }
+})
