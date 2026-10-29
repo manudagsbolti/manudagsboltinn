@@ -21,7 +21,7 @@ reverse the latest correction and reconnect. Verify the history after sync.
 
 ## 1. Local
 
-Fyrir local-only keyrslu þarf ekki `.env.local`. Fyrir cloud má afrita tómu `.env.example` yfir í `.env.local` og fylla út á tækinu; ekki vista gildin í Git. `npm ci` endursetur dependencies úr lockfile.
+Local keyrsla notar sama Supabase-aðgang og production. Setja má tengigildi í `.env.local` úr `.env.example`; aldrei vista lykla í Git. Áður innskráð tæki geta áfram unnið offline með vistuðum aðgangi og gögnum.
 
 Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá `docs/V1_AUDIT.md` fyrir ólokin síma/cloud acceptance atriði og ósamræmi í eldri uppsetningarleiðbeiningum.
 
@@ -35,7 +35,7 @@ Keyrðu `npm run typecheck`, `npm test` og `npm run build` fyrir útgáfu. Sjá 
 ### Nýr, tómur grunnur
 
 1. Stofna/opna project. `.env.local` þarf Project URL og publishable key; gildin fara aldrei í Git.
-2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–017 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
+2. Opna **SQL Editor → New query**. Afrita **alla** `supabase/setup-empty-project.sql` og velja **Run**. Skráin keyrir migrations 001–019 í einni transaction og stöðvar ef app-töflur eru þegar til. Hún er framleidd með `npm run supabase:setup`; ekki keyra bæði hana og einstöku migrations.
 3. Undir **Authentication → Users → Add user → Create new user** stofna þinn notanda með netfangi og lykilorði og staðfesta netfangið með **Auto Confirm User** ef sá valkostur birtist. Appið notar netfang/lykilorð; það hefur ekki enn sérstakt skjáflæði til að velja lykilorð úr boðstengli.
 4. Afrita `User UID` notandans úr Authentication → Users. Opna nýja SQL Editor fyrirspurn og keyra:
 
@@ -182,3 +182,11 @@ Run `supabase/migrations/013_recorder_ratings.sql` after 012, before deploying. 
 ### Attendance role groups (014)
 
 Run `supabase/migrations/014_recorder_roster_roles.sql` after 013. Shared users then use the connection button (or sign in again) to download date-bound roles along with ratings. Existing caches remain usable but show unknown roles until refreshed.
+
+### Miðannamöt og lokahóf (018)
+
+Apply only `supabase/migrations/018_presentations.sql` after 017 on an existing database before publishing. It adds immutable publications, admin publishing/archive RPCs and a public slides-only RPC. See [Presentations](PRESENTATIONS.md). Preview and standalone HTML work offline.
+
+### Niðurstöður pallborðs (019)
+
+Apply only supabase/migrations/019_discussion_entries.sql after 018 on existing projects. It adds append-only admin discussion outcomes, separate from public slide decks. Local saves work offline; cloud retry requires this migration. Do not rerun the empty-project setup.

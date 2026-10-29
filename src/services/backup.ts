@@ -7,6 +7,8 @@ type BackupPayload = {
   exportedAt: string
   app: 'Mánudagsboltinn'
   data: {
+    presentations?: unknown[]
+    discussionNotes?: unknown[]
     players: unknown[]
     seasons: unknown[]
     rolePeriods: unknown[]
@@ -26,6 +28,8 @@ export async function exportBackup(): Promise<void> {
   const payload: BackupPayload = {
     kind: 'manudagsboltinn-backup', schemaVersion: 1, exportedAt: nowIso(), app: 'Mánudagsboltinn',
     data: {
+      presentations: await db.presentations.toArray(),
+      discussionNotes: await db.discussionNotes.toArray(),
       players: await db.players.toArray(), seasons: await db.seasons.toArray(), rolePeriods: await db.rolePeriods.toArray(), sessions: await db.sessions.toArray(),
       sessionPlayers: await db.sessionPlayers.toArray(), sessionBackfills: await db.sessionBackfills.toArray(), sets: await db.sets.toArray(), setTeams: await db.setTeams.toArray(),
       setTeamMembers: await db.setTeamMembers.toArray(), games: await db.games.toArray(), goals: await db.goals.toArray(), timerEvents: await db.timerEvents.toArray(),
@@ -43,7 +47,9 @@ export async function restoreBackup(file: File): Promise<{ sessions: number; goa
   const raw = JSON.parse(await file.text()) as BackupPayload
   if (raw.kind !== 'manudagsboltinn-backup' || raw.schemaVersion !== 1 || !raw.data) throw new Error('Þetta lítur ekki út eins og gilt Mánudagsboltinn backup.')
   const d = raw.data as any
-  await db.transaction('rw', [db.players, db.seasons, db.rolePeriods, db.sessions, db.sessionPlayers, db.sessionBackfills, db.sets, db.setTeams, db.setTeamMembers, db.games, db.goals, db.timerEvents, db.syncQueue, db.undoActions], async () => {
+  await db.transaction('rw', [db.discussionNotes, db.presentations, db.players, db.seasons, db.rolePeriods, db.sessions, db.sessionPlayers, db.sessionBackfills, db.sets, db.setTeams, db.setTeamMembers, db.games, db.goals, db.timerEvents, db.syncQueue, db.undoActions], async () => {
+    if (d.presentations?.length) await db.presentations.bulkPut(d.presentations)
+    if (d.discussionNotes?.length) await db.discussionNotes.bulkPut(d.discussionNotes.map((row:import('./discussionNotes').DiscussionEntry)=>({...row,syncState:'pending'})))
     await db.undoActions.clear()
     await Promise.all([db.players.clear(),db.seasons.clear(),db.rolePeriods.clear(),db.sessions.clear(),db.sessionPlayers.clear(),db.sessionBackfills.clear(),db.sets.clear(),db.setTeams.clear(),db.setTeamMembers.clear(),db.games.clear(),db.goals.clear(),db.timerEvents.clear(),db.syncQueue.clear()])
     if (d.players?.length) await db.players.bulkPut(d.players)

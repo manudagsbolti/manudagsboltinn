@@ -137,3 +137,11 @@ Cloudflare secrets and does not deploy the app.
 - In admin and shared attendance selection, choose a substitute, select all regulars, then deselect all regulars: the substitute remains selected. Check date-bound roles, missing cache, and review season auto-selection/no-season placeholder.
 
 - With both two and three teams, swap drawn team colors: membership and captains stay unchanged. Choose opening court order and confirm; the saved READY game uses that order. Automatic next-set rotation remains unchanged.
+
+## Event publications
+
+Automated publication tests cover cutoff snapshots, ABS denominator, shared ranks, role separation, aggregate pair samples, immutability, retry and database permissions. Manually: create a preview offline, navigate with arrows/dropdown, download/open HTML, publish online, open public link in a signed-out browser, edit later game facts and verify the published deck stays unchanged. Check projector and narrow phone layouts.
+
+## Discussion outcomes and fun facts
+
+Tests cover penultimate fact placement, regular-only goal shares, tied leaders, local outcome persistence, offline failure/retry, append-only SQL receipts, anonymous/non-admin denial, unsent-note logout protection, and reopening saved outcomes in the cross-event UI archive. Manually verify a real admin can sync notes after migration 019 and see them on a second device.

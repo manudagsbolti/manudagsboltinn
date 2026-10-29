@@ -15,3 +15,19 @@ end $$;
 const sql = files.map(name => `\n-- Migration: ${name}\n${readFileSync(new URL(name, directory), 'utf8').trim()}\n`).join('')
 writeFileSync(new URL('../supabase/setup-empty-project.sql', import.meta.url), `${header}${sql}\ncommit;\n`, 'utf8')
 console.log(`Prepared ${files.length} migrations in supabase/setup-empty-project.sql`)
+
+const publicationUpgrade = ['018_presentations.sql', '019_discussion_entries.sql']
+const upgrade = `-- Existing project on migrations 001-017 only. Does not alter users or passwords.
+-- Run once in Supabase SQL Editor before deploying presentations.
+begin;
+do $$ begin
+  if to_regclass('public.presentations') is not null
+    or to_regclass('public.presentation_discussion_entries') is not null then
+    raise exception 'Publication tables already exist. Inspect applied migrations before retrying.';
+  end if;
+end $$;
+${publicationUpgrade.map(name => readFileSync(new URL(name, directory), 'utf8').trim()).join('\n\n')}
+commit;
+`
+writeFileSync(new URL('../supabase/upgrade-presentations-018-019.sql', import.meta.url), upgrade, 'utf8')
+console.log('Prepared safe existing-project upgrade for migrations 018-019')

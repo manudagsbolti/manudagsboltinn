@@ -1,3 +1,5 @@
+import type { Presentation } from '../services/presentations'
+import type { LocalDiscussionEntry } from '../services/discussionNotes'
 import Dexie, { type EntityTable, type Table } from 'dexie'
 import type { Game, Goal, Player, PlayerRolePeriod, Season, Session, SessionBackfill, SessionPlayer, SetRecord, SetTeam, SetTeamMember, UUID } from '../domain/types'
 
@@ -37,6 +39,8 @@ export interface SyncQueueItem {
 }
 
 export class ManudagsboltinnDb extends Dexie {
+  presentations!: EntityTable<Presentation, 'id'>
+  discussionNotes!: EntityTable<LocalDiscussionEntry, 'id'>
   players!: EntityTable<Player, 'id'>
   seasons!: EntityTable<Season, 'id'>
   rolePeriods!: EntityTable<PlayerRolePeriod, 'id'>
@@ -105,6 +109,8 @@ export class ManudagsboltinnDb extends Dexie {
     })
     this.version(6).stores({ submissions: 'sessionId, state' })
     this.version(7).stores({ ratingCache: 'id' })
+    this.version(8).stores({ presentations: 'id, seasonId, eventDate' })
+    this.version(9).stores({ discussionNotes: 'id, presentationId, seasonId, eventDate, createdAt, syncState' })
   }
 }
 
