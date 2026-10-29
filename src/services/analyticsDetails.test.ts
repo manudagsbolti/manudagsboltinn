@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { buildSeasonAnalytics, type AnalyticsData } from './seasonAnalytics'
+import { buildSeasonAnalytics, playerGameRecord, type AnalyticsData } from './seasonAnalytics'
 import { buildPresentation } from './presentations'
 import type { Season } from '../domain/types'
 
@@ -27,10 +27,13 @@ it('counts draws only for on-court players and counts recorded captain sets and 
 it('counts joint games including draws in pair slides and gives sweep winners a dated honour',()=>{
   const data=fixture()
   data.memberships.find(m=>m.playerId==='b')!.teamId='A'
-  const p=buildPresentation(data,season,{title:'Miðannamat',kind:'midterm',eventDate:'2026-10-29',cutoff:'2026-10-29',sections:['best','sweeps'],minimumPairSets:1,discussion:''})
+  const p=buildPresentation(data,season,{title:'Miðannamat',kind:'midterm',eventDate:'2026-10-29',cutoff:'2026-10-29',sections:['best','sweeps','table'],minimumPairSets:1,discussion:''})
   const pair=p.slides.find(s=>s.title==='Besta pörunin')!
   expect(pair.rows[0][pair.columns.indexOf('Leikir')]).toBe('5')
   expect(pair.rows[0][pair.columns.indexOf('Unnir leikir')]).toBe('4')
+  const table=p.slides.find(s=>s.title==='Staðan')!
+  const row=table.rows.find(r=>r[0]==='a')!
+  expect(['Spilaðir leikir','Jafntefli','Unnir leikir'].map(c=>row[table.columns.indexOf(c)])).toEqual(['5','1','4'])
   expect(p.slides.find(s=>s.title==='Sópararnir')?.rows).toEqual([['a','1','2026-09-07'],['b','1','2026-09-07']])
 })
 it('marks aggregate draws unknown and derives sweeps without inventing game counts',()=>{
@@ -40,4 +43,13 @@ it('marks aggregate draws unknown and derives sweeps without inventing game coun
   expect(a.totals.drawsIncomplete).toBe(true)
   expect(a.players.find(p=>p.playerId==='a')).toMatchObject({sweeps:1,drawsIncomplete:true,miniGames:0})
   expect(a.players.find(p=>p.playerId==='b')).toMatchObject({sweeps:0,nixDays:1})
+  expect(playerGameRecord(a.players.find(p=>p.playerId==='a')!)).toEqual({played:'—',draws:'—',wins:'8'})
+})
+it('keeps unknown substitute games out of the regular game record',()=>{
+  const data=fixture()
+  data.sessions.push({...data.sessions[0],id:'legacy',playedOn:'2026-09-14'})
+  data.attendance.push({sessionId:'legacy',playerId:'a',roleAtSession:'SUBSTITUTE'})
+  data.backfills=[{sessionId:'legacy',sourceKind:'AGGREGATE',assistsRecorded:false,teams:[{code:'A',name:'A',color:'red',playerIds:['a']},{code:'B',name:'B',color:'blue',playerIds:['b']}],rounds:[{roundNo:1,teamGoals:{A:4,B:3}}],playerGoals:[],createdAt:'',updatedAt:''}]
+  expect(playerGameRecord(buildSeasonAnalytics(data,season,'REGULAR').players.find(p=>p.playerId==='a')!)).toEqual({played:'5',draws:'1',wins:'4'})
+  expect(playerGameRecord(buildSeasonAnalytics(data,season,'ALL').players.find(p=>p.playerId==='a')!)).toEqual({played:'—',draws:'1+',wins:'8'})
 })

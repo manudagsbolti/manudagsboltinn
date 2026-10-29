@@ -23,7 +23,10 @@ it('shows all basic columns, defaults to ABS and exposes the attended night behi
   try{
     await act(async()=>root.render(createElement(StatsScreen,{onPresent:()=>{}})))
     const table=host.querySelector('.statistics-overview')!
-    for(const label of ['Unnin sett','Spiluð sett','ABS','ADJ','Stig','Mörk','Assist','G+A','Choke','Nix','Mæting']) expect(table.querySelector('thead')!.textContent).toContain(label)
+    for(const label of ['Unnin sett','Spiluð sett','ABS','ADJ','Spilaðir leikir','Jafntefli','Unnir leikir','Stig','Mörk','Assist','G+A','Choke','Nix','Mæting']) expect(table.querySelector('thead')!.textContent).toContain(label)
+    const headers=Array.from(table.querySelectorAll('thead th')).map(c=>c.textContent)
+    const winnerCells=Array.from(table.querySelectorAll('tbody tr')[0].children).map(c=>c.textContent)
+    expect(['Spilaðir leikir','Jafntefli','Unnir leikir'].map(c=>winnerCells[headers.indexOf(c)])).toEqual(['—','—','8'])
     expect(table.querySelector('tbody tr th')!.textContent).toBe('winner')
     expect(table.querySelectorAll('tbody tr')).toHaveLength(2)
     expect(table.querySelector('tbody')!.textContent).not.toContain('absent')

@@ -57,6 +57,12 @@ til að nota breytt tímabil.
 
 ## Tölfræði
 
+Stöðuglæran og varamannataflan sýna Spilaðir leikir, Jafntefli og Unnir leikir
+saman, eins og tölfræðisíðan. Þessi þrjú telja smáleiki, ekki sett. Sama
+framsetning notar — þegar eldri gögn vantar heildarleikjafjölda/jafntefli og +
+fyrir þekktan lágmarksfjölda jafntefla á blönduðu tímabili. Hlutverkssían ræður
+gagnaþekjunni líka: kvöld sem varamaður gerir ekki fastamannatölur óþekktar.
+
 Nix (staðfest 29. október 2026): eitt mætt og spilað kvöld án unnins setts,
 jafnvel þótt leikmaður fái stig úr smáleikjum. Telst einu sinni á kvöld, ekki
 einu sinni í setti. Fjarvera og óspiluð kvöld telja ekki. Sama reikniregla er í

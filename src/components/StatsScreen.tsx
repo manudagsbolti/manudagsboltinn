@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/localDb'
-import { buildSeasonAnalytics, compareCompetitionPlayers, seasonStartYearForDate, type SeasonPlayerAnalytics } from '../services/seasonAnalytics'
+import { buildSeasonAnalytics, compareCompetitionPlayers, playerGameRecord, seasonStartYearForDate, type SeasonPlayerAnalytics } from '../services/seasonAnalytics'
 
 const overviewColumns = [
   ['setWins','Unnin sett'], ['setsPlayed','Spiluð sett'], ['ABS','ABS'], ['setWinRate','ADJ'],
-  ['points','Stig'], ['smallWins','Unnir leikir'], ['miniGames','Smáleikir'], ['draws','Jafntefli'], ['sweeps','Sópanir'], ['captainSets','Skráð fyrirliðasett'], ['goals','Mörk'],
+  ['miniGames','Spilaðir leikir'], ['draws','Jafntefli'], ['smallWins','Unnir leikir'], ['points','Stig'], ['sweeps','Sópanir'], ['captainSets','Skráð fyrirliðasett'], ['goals','Mörk'],
   ['assists','Assist'], ['contributions','G+A'], ['ownGoals','Sjálfsmörk'], ['chokes','Choke'],
   ['nixDays','Nix'], ['zeroPointSets','0-sett'], ['sessions','Kvöld'], ['attendance','Mæting'], ['rating','Rating'],
 ] as const
@@ -34,7 +34,13 @@ export function StatsScreen({ onPresent }: { onPresent: (seasonId: string) => vo
   const overall = [...analytics.players].sort((a,b)=>(ranking==='ABS'?compareCompetitionPlayers(a,b):value(b,ranking)-value(a,ranking))||playerName(a.playerId).localeCompare(playerName(b.playerId),'is'))
   const rankFor=(row:SeasonPlayerAnalytics,index:number)=>ranking==='ABS'?(overall.some(other=>other.playerId!==row.playerId&&compareCompetitionPlayers(other,row)===0)?'=':index+1):1+new Set(overall.slice(0,index).map(p=>value(p,ranking))).size
   const percent=(a:number,b:number)=>b?`${fmt(100*a/b)}%`:'—'
-  const display=(row:SeasonPlayerAnalytics,key:Ranking)=>key==='ABS'?percent(row.setWins,analytics.totals.sets):key==='setWinRate'?percent(row.setWins,row.setsPlayed):key==='draws'&&row.drawsIncomplete?(row.draws?`${row.draws}+`:'—'):key==='attendance'?(roleFilter==='SUBSTITUTE'?'—':percent(row.sessions,analytics.totals.nights)):key==='miniGames'&&data.backfills.some(b=>analytics.sessions.some(s=>s.id===b.sessionId)&&b.teams.some(t=>t.playerIds.includes(row.playerId)))?'—':String(value(row,key))
+  const display=(row:SeasonPlayerAnalytics,key:Ranking)=>{
+    const record=playerGameRecord(row)
+    if(key==='miniGames')return record.played
+    if(key==='draws')return record.draws
+    if(key==='smallWins')return record.wins
+    return key==='ABS'?percent(row.setWins,analytics.totals.sets):key==='setWinRate'?percent(row.setWins,row.setsPlayed):key==='attendance'?(roleFilter==='SUBSTITUTE'?'—':percent(row.sessions,analytics.totals.nights)):String(value(row,key))
+  }
   const playerNights=inspectedPlayer?analytics.sessions.flatMap(session=>{
     const night=buildSeasonAnalytics({...data,sessions:[session]},analytics.season,roleFilter).players.find(p=>p.playerId===inspectedPlayer)
     return night?[{session,night}]:[]

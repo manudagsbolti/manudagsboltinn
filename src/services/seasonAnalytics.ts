@@ -77,6 +77,11 @@ export function compareCompetitionPlayers(a:SeasonPlayerAnalytics,b:SeasonPlayer
   return b.setWins-a.setWins||b.sessions-a.sessions||b.points-a.points
 }
 
+export function playerGameRecord(row:Pick<SeasonPlayerAnalytics,'miniGames'|'smallWins'|'draws'|'drawsIncomplete'>){
+  // Aggregate backfills know wins but not all games/draws, including mixed periods.
+  return {played:row.drawsIncomplete?'—':String(row.miniGames),draws:row.drawsIncomplete?(row.draws?`${row.draws}+`:'—'):String(row.draws),wins:String(row.smallWins)}
+}
+
 export function seasonStartYearForDate(dateIso: string): number {
   const [year, month] = dateIso.split('-').map(Number)
   return month >= 8 ? year : year - 1

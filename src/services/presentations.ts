@@ -1,6 +1,6 @@
 import type { Season } from '../domain/types'
 import { buildSetTeamStats } from '../domain/rules'
-import { buildSeasonAnalytics, compareCompetitionPlayers, type AnalyticsData } from './seasonAnalytics'
+import { buildSeasonAnalytics, compareCompetitionPlayers, playerGameRecord, type AnalyticsData } from './seasonAnalytics'
 import { db } from '../db/localDb'
 import { supabase } from '../lib/supabase'
 
@@ -134,9 +134,9 @@ export function buildPresentation(data: AnalyticsData, season: Season, options: 
     if(tied.length>1&&tied.filter(p=>finalTieOrder.includes(p.playerId)).length<needed)pendingTieGroups.push({playerIds:tied.map(p=>p.playerId),places:Array.from({length:needed},(_,j)=>i+j+1)})
     i+=tied.length
   }
-  const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>[name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),String(p.points),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)])
-  const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Stig','Choke','Nix','Mæting']
-  const rankingNote=`${periodNote} Aðeins framlag sem fastamaður. Röðun: ABS → mæting → stig úr smáleikjum. ABS = unnin sett / ${totalSets} sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Stig reiknast í hverju setti sem heill hluti smáleikjasigra / sigrar fyrir stig (venjulega 1); ekki persónuleg mörk. Enn jöfn verðlaunasæti ráðast af sérstaklega staðfestri úrslitaröð eftir kosningu.`
+  const tableRows=(players:typeof standings,includeAssists=false)=>players.map(p=>{const record=playerGameRecord(p);return [name(p.playerId),String(p.setWins),pct(p.setWins,totalSets),pct(p.setWins,p.setsPlayed),String(p.goals),...(includeAssists?[String(p.assists),String(p.contributions)]:[]),record.played,record.draws,record.wins,String(p.points),String(p.chokes),String(p.nixDays),pct(p.sessions,sessions.length)]})
+  const columns=['Leikmaður','Sett','ABS','ADJ','Mörk','Spilaðir leikir','Jafntefli','Unnir leikir','Stig','Choke','Nix','Mæting']
+  const rankingNote=`${periodNote} Aðeins framlag sem fastamaður. Röðun: ABS → mæting → stig úr smáleikjum. ABS = unnin sett / ${totalSets} sett tímabilsins. ADJ = unnin sett / spiluð sett viðkomandi. Stig reiknast í hverju setti sem heill hluti smáleikjasigra / sigrar fyrir stig (venjulega 1); ekki persónuleg mörk. Enn jöfn verðlaunasæti ráðast af sérstaklega staðfestri úrslitaröð eftir kosningu. Spilaðir leikir, jafntefli og unnir leikir telja smáleiki. — merkir óþekktan fjölda í eldri gögnum; + er þekktur lágmarksfjöldi jafntefla.`
   add('subs','Varamenn',columns,tableRows([...subs.players].sort((a,b)=>b.setWins-a.setWins)),'Aðeins framlag á kvöldum sem varamaður. ABS og mæting nota öll kvöld/sett tímabilsins.')
   if(options.sections.includes('podium'))for(const rank of [3,2,1]){
     const winners=standings[rank-1]?[standings[rank-1]]:[]
