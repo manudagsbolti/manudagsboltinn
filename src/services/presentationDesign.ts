@@ -74,5 +74,11 @@ export const deckStyles = `
 @media(max-width:800px){.deck-all-pairs{grid-template-columns:1fr}.deck-compact-table .deck-table td,.deck-compact-table .deck-table th{padding-left:6px;padding-right:6px}}
 .deck-coverage{font-size:11px!important;line-height:1.4;margin:0 0 10px!important;color:#e7c584!important}.deck-compact-table .deck-table th,.deck-compact-table .deck-table td{padding-left:8px;padding-right:8px}
 .deck-fun-facts .deck-copy{width:100%;max-width:none}.deck-fun-facts .deck-caption{display:none}.deck-fun-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.deck-scene.deck-fun-facts{display:block}.deck-fun-facts article{background:#ffffff08;border-left:4px solid #dcff72;padding:22px;border-radius:8px}.deck-fun-facts article h2{margin:0 0 10px;font-size:clamp(17px,2vw,28px)}.deck-fun-facts article strong{font-size:clamp(32px,4vw,62px);font-weight:950;color:#dcff72}.deck-fun-facts article p{font-size:clamp(12px,1.2vw,17px);line-height:1.5;margin:8px 0 0}.deck-fun-facts .deck-copy>h1{font-size:clamp(34px,4vw,60px)!important}@media(max-width:700px){.deck-fun-facts{grid-template-columns:1fr}}
+/* Explicit slide colors keep app theme accents out of player names and results. */
+.event-presentation .deck-player>strong,.event-presentation .deck-story-names h2,.event-presentation .deck-podium article h2,.event-presentation .deck-table td,.event-presentation .deck-all-pairs li{color:#ffffff!important}
+.event-presentation .deck-ranking li{color:#ffffff;background:#1d2424}
+.event-presentation .deck-ranking li:first-child{background:#24331b;color:#ffffff;border-color:#dcff72}
+.event-presentation .deck-ranking .deck-value,.event-presentation .deck-ranking .deck-details b{color:#ffffff!important}
+.event-presentation .deck-ranking .deck-details{color:#e8eee4;opacity:1}
 @media print{.deck-toolbar,.deck-controls,.deck-method{display:none!important}.deck-scene{min-height:95vh;break-after:page;print-color-adjust:exact}.deck-copy{animation:none}.deck-page{display:block!important}}
 `
